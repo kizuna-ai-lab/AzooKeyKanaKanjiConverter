@@ -1,23 +1,41 @@
-import Foundation
+public import Foundation
 @_exported public import KanaKanjiConverterModule
+
+/// Default dictionary URL for the main dictionary
+public func defaultDictionaryURL() -> URL {
+    #if os(iOS) || os(watchOS) || os(tvOS) || os(visionOS)
+    return Bundle.module.bundleURL.appendingPathComponent("Dictionary", isDirectory: true)
+    #elseif os(macOS)
+    return Bundle.module.resourceURL!.appendingPathComponent("Dictionary", isDirectory: true)
+    #else
+    return Bundle.module.resourceURL!.appendingPathComponent("Dictionary", isDirectory: true)
+    #endif
+}
+
+/// Default dictionary URL for the pinyin dictionary (separate from main dictionary)
+public func defaultPinyinDictionaryURL() -> URL {
+    #if os(iOS) || os(watchOS) || os(tvOS) || os(visionOS)
+    return Bundle.module.bundleURL.appendingPathComponent("PinyinDictionary", isDirectory: true)
+    #elseif os(macOS)
+    return Bundle.module.resourceURL!.appendingPathComponent("PinyinDictionary", isDirectory: true)
+    #else
+    return Bundle.module.resourceURL!.appendingPathComponent("PinyinDictionary", isDirectory: true)
+    #endif
+}
 
 public extension DicdataStore {
     static func withDefaultDictionary(preloadDictionary: Bool = false) -> Self {
-        #if os(iOS) || os(watchOS) || os(tvOS) || os(visionOS)
-        let dictionaryDirectory = Bundle.module.bundleURL.appendingPathComponent("Dictionary", isDirectory: true)
-        #elseif os(macOS)
-        let dictionaryDirectory = Bundle.module.resourceURL!.appendingPathComponent("Dictionary", isDirectory: true)
-        #else
-        let dictionaryDirectory = Bundle.module.resourceURL!.appendingPathComponent("Dictionary", isDirectory: true)
-        #endif
-
+        let dictionaryDirectory = defaultDictionaryURL()
         return .init(dictionaryURL: dictionaryDirectory, preloadDictionary: preloadDictionary)
     }
 }
 
 public extension KanaKanjiConverter {
     static func withDefaultDictionary(preloadDictionary: Bool = false) -> Self {
-        .init(dicdataStore: .withDefaultDictionary(preloadDictionary: preloadDictionary))
+        let converter = Self.init(dicdataStore: .withDefaultDictionary(preloadDictionary: preloadDictionary))
+        // Set the pinyin dictionary URL to the separate PinyinDictionary folder
+        converter.setPinyinDictionaryURL(defaultPinyinDictionaryURL())
+        return converter
     }
 }
 

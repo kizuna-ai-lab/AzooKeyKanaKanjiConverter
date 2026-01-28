@@ -134,6 +134,12 @@ public final class KanaKanjiConverter {
         self.dicdataStoreState.updatePinyinLookupEnabled(enabled)
     }
 
+    /// 拼音辞書のURLを設定します。
+    /// - Parameter url: 拼音辞書のディレクトリURL。`nil`の場合はデフォルトの辞書ディレクトリを使用します。
+    public func setPinyinDictionaryURL(_ url: URL?) {
+        self.dicdataStoreState.updatePinyinDictionaryURL(url)
+    }
+
     public func updateUserDictionaryURL(_ newURL: URL, forceReload: Bool = false) {
         self.dicdataStoreState.updateUserDictionaryURL(newURL, forceReload: forceReload)
     }

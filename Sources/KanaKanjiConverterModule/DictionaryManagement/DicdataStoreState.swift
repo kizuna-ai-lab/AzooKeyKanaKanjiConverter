@@ -31,6 +31,9 @@ package final class DicdataStoreState {
     private(set) var pinyinDictionaryHasLoaded: Bool = false
     private(set) var pinyinDictionaryLOUDS: LOUDS?
 
+    // Pinyin dictionary location (can be separate from main dictionary)
+    var pinyinDictionaryURL: URL?
+
     func updateUserDictionaryURL(_ newURL: URL, forceReload: Bool) {
         if self.userDictionaryURL != newURL || forceReload {
             self.userDictionaryURL = newURL
@@ -71,6 +74,14 @@ package final class DicdataStoreState {
 
     func updatePinyinLookupEnabled(_ enabled: Bool) {
         self.enablePinyinLookup = enabled
+    }
+
+    func updatePinyinDictionaryURL(_ newURL: URL?) {
+        if self.pinyinDictionaryURL != newURL {
+            self.pinyinDictionaryURL = newURL
+            self.pinyinDictionaryLOUDS = nil
+            self.pinyinDictionaryHasLoaded = false
+        }
     }
 
     func updatePinyinDictionaryLOUDS(_ newLOUDS: LOUDS?) {

@@ -176,7 +176,10 @@ public final class DicdataStore {
         if query == "pinyin" {
             if state.pinyinDictionaryHasLoaded {
                 return state.pinyinDictionaryLOUDS
-            } else if let louds = LOUDS.load("pinyin", dictionaryURL: self.dictionaryURL) {
+            }
+            // Try pinyin-specific URL first, then fall back to main dictionary
+            let pinyinURL = state.pinyinDictionaryURL ?? self.dictionaryURL
+            if let louds = LOUDS.load("pinyin", dictionaryURL: pinyinURL) {
                 state.updatePinyinDictionaryLOUDS(louds)
                 return louds
             } else {
@@ -570,6 +573,15 @@ public final class DicdataStore {
                 $0.metadata = .isLearned
             }
         }
+        // Determine the effective URL for the identifier
+        // Use pinyin-specific URL when loading pinyin dictionary data
+        let effectiveURL: URL
+        if identifier == "pinyin", let pinyinURL = state.pinyinDictionaryURL {
+            effectiveURL = pinyinURL
+        } else {
+            effectiveURL = self.dictionaryURL
+        }
+
         for (key, value) in dict {
             // Default dictionary shards are stored under escaped identifiers with concatenated shard suffix
             let escaped = DictionaryBuilder.escapedIdentifier(identifier)
@@ -578,7 +590,7 @@ public final class DicdataStore {
                 fileID,
                 indices: value.map { $0 & DictionaryBuilder.localMask },
                 cache: self.loudstxts[fileID],
-                dictionaryURL: self.dictionaryURL
+                dictionaryURL: effectiveURL
             ))
         }
         return data

@@ -64,6 +64,7 @@ var targets: [Target] = [
         resources: [
             .copy("azooKey_dictionary_storage/Dictionary"),
             .copy("azooKey_emoji_dictionary_storage/EmojiDictionary"),
+            .copy("PinyinDictionary"),
         ],
         swiftSettings: swiftSettings
     ),
