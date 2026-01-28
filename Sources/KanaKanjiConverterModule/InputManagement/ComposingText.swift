@@ -387,6 +387,29 @@ public struct ComposingText: Sendable {
         return Dictionary(segmentBoundaries.map { ($0.inputIndex, $0.surfaceIndex) }) { _, second in second }
     }
 
+    /// Get the raw roman input for pinyin lookup (for hybrid mode)
+    /// Returns the original roman characters before kana conversion
+    public var rawRomanInput: String {
+        input.compactMap { element -> Character? in
+            if case let .character(c) = element.piece { return c }
+            return nil
+        }.map(String.init).joined()
+    }
+
+    /// Get raw roman input for a specific range (for pinyin lookup)
+    /// - Parameters:
+    ///   - startInputIndex: Starting index in the input array
+    ///   - maxLength: Maximum number of characters to extract
+    /// - Returns: Lowercase roman string for the specified range
+    public func rawRomanInput(from startInputIndex: Int, maxLength: Int) -> String {
+        let endIndex = min(startInputIndex + maxLength, input.count)
+        guard startInputIndex < endIndex else { return "" }
+        return input[startInputIndex..<endIndex].compactMap { element -> Character? in
+            if case let .character(c) = element.piece { return c }
+            return nil
+        }.map(String.init).joined().lowercased()
+    }
+
     public mutating func stopComposition() {
         self.input = []
         self.convertTarget = ""

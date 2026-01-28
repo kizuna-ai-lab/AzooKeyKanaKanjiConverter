@@ -26,6 +26,11 @@ package final class DicdataStoreState {
     private(set) var memoryHasLoaded: Bool = false
     private(set) var memoryLOUDS: LOUDS?
 
+    // Pinyin dictionary for hybrid input mode
+    var enablePinyinLookup: Bool = false
+    private(set) var pinyinDictionaryHasLoaded: Bool = false
+    private(set) var pinyinDictionaryLOUDS: LOUDS?
+
     func updateUserDictionaryURL(_ newURL: URL, forceReload: Bool) {
         if self.userDictionaryURL != newURL || forceReload {
             self.userDictionaryURL = newURL
@@ -62,6 +67,15 @@ package final class DicdataStoreState {
     func updateUserShortcutsLOUDS(_ newLOUDS: LOUDS?) {
         self.userShortcutsLOUDS = newLOUDS
         self.userShortcutsHasLoaded = true
+    }
+
+    func updatePinyinLookupEnabled(_ enabled: Bool) {
+        self.enablePinyinLookup = enabled
+    }
+
+    func updatePinyinDictionaryLOUDS(_ newLOUDS: LOUDS?) {
+        self.pinyinDictionaryLOUDS = newLOUDS
+        self.pinyinDictionaryHasLoaded = true
     }
 
     @available(*, deprecated, message: "This API is deprecated. Directly update the state instead.")

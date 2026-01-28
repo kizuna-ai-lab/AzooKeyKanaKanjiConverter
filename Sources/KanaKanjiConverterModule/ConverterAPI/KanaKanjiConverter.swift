@@ -128,6 +128,12 @@ public final class KanaKanjiConverter {
         self.dicdataStoreState.importDynamicUserDictionary(dicdata, shortcuts: shortcuts)
     }
 
+    /// 拼音入力の有効/無効を設定します。
+    /// - Parameter enabled: 拼音入力を有効にする場合は`true`
+    public func setPinyinLookupEnabled(_ enabled: Bool) {
+        self.dicdataStoreState.updatePinyinLookupEnabled(enabled)
+    }
+
     public func updateUserDictionaryURL(_ newURL: URL, forceReload: Bool = false) {
         self.dicdataStoreState.updateUserDictionaryURL(newURL, forceReload: forceReload)
     }

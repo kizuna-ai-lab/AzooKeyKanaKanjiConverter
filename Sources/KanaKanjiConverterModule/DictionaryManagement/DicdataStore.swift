@@ -172,6 +172,19 @@ public final class DicdataStore {
                 debug("Error: ユーザ辞書のloudsファイルの読み込みに失敗しましたが、このエラーは深刻ではありません。")
             }
         }
+        // Pinyin dictionary for hybrid input mode
+        if query == "pinyin" {
+            if state.pinyinDictionaryHasLoaded {
+                return state.pinyinDictionaryLOUDS
+            } else if let louds = LOUDS.load("pinyin", dictionaryURL: self.dictionaryURL) {
+                state.updatePinyinDictionaryLOUDS(louds)
+                return louds
+            } else {
+                state.updatePinyinDictionaryLOUDS(nil)
+                debug("Error: 拼音辞書のloudsファイルの読み込みに失敗しましたが、このエラーは深刻ではありません。")
+                return nil
+            }
+        }
 
         if self.importedLoudses.contains(query) {
             return self.loudses[query]
@@ -438,6 +451,78 @@ public final class DicdataStore {
         return louds.prefixNodeIndices(chars: charIDs, maxDepth: depth, maxCount: maxCount)
     }
 
+    /// Search pinyin dictionary using raw roman input for hybrid mode
+    /// - Parameters:
+    ///   - romanInput: The raw roman input string (e.g., "xiansheng")
+    ///   - startIndex: Starting position in the roman input
+    ///   - maxLength: Maximum length to search
+    ///   - state: Dictionary store state
+    /// - Returns: Array of DicdataElements matching the pinyin input
+    func pinyinPrefixSearch(
+        romanInput: String,
+        startIndex: Int,
+        maxLength: Int,
+        state: DicdataStoreState
+    ) -> [DicdataElement] {
+        guard state.enablePinyinLookup else { return [] }
+        guard let louds = self.loadLOUDS(query: "pinyin", state: state) else { return [] }
+
+        // Extract the search string from the roman input
+        let searchString = String(romanInput.dropFirst(startIndex).prefix(maxLength)).lowercased()
+        guard !searchString.isEmpty else { return [] }
+
+        // Convert roman input to charIDs for LOUDS lookup
+        let charIDs = searchString.map { self.character2charId($0) }
+
+        // Prefix search in pinyin LOUDS - find all entries that start with this pinyin
+        let indices = louds.prefixNodeIndices(chars: charIDs, maxDepth: maxLength, maxCount: 100)
+
+        // Get dictionary entries from the pinyin dictionary
+        return self.getDicdataFromLoudstxt3(identifier: "pinyin", indices: indices, state: state)
+    }
+
+    /// Search pinyin dictionary for exact matches at various lengths
+    /// Returns entries with their matched pinyin length for lattice integration
+    /// - Parameters:
+    ///   - romanInput: Full roman input string
+    ///   - startIndex: Starting position
+    ///   - maxLength: Maximum length to search
+    ///   - state: Dictionary store state
+    /// - Returns: Array of tuples (DicdataElement, matched pinyin length)
+    func pinyinSearchWithLength(
+        romanInput: String,
+        startIndex: Int,
+        maxLength: Int,
+        state: DicdataStoreState
+    ) -> [(element: DicdataElement, pinyinLength: Int)] {
+        guard state.enablePinyinLookup else { return [] }
+        guard let louds = self.loadLOUDS(query: "pinyin", state: state) else { return [] }
+
+        let availableInput = String(romanInput.dropFirst(startIndex).prefix(maxLength)).lowercased()
+        guard !availableInput.isEmpty else { return [] }
+
+        var results: [(element: DicdataElement, pinyinLength: Int)] = []
+
+        // Try progressively longer substrings to find all matching entries
+        for length in 1...availableInput.count {
+            let searchString = String(availableInput.prefix(length))
+            let charIDs = searchString.map { self.character2charId($0) }
+
+            // Find exact matches at this length
+            if let nodeIndex = louds.searchNodeIndex(chars: charIDs) {
+                let entries = self.getDicdataFromLoudstxt3(identifier: "pinyin", indices: [nodeIndex], state: state)
+                for entry in entries {
+                    // Verify the ruby (pinyin) matches the search string exactly
+                    if entry.ruby.lowercased() == searchString {
+                        results.append((entry, length))
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
 
     package func getDicdataFromLoudstxt3(identifier: String, indices: some Sequence<Int>, state: DicdataStoreState) -> [DicdataElement] {
         // Group indices by shard
@@ -634,6 +719,38 @@ public final class DicdataStore {
                 }
             }
         }
+
+        // MARK: Parallel pinyin lookup for hybrid mode
+        // When pinyin lookup is enabled, search the pinyin dictionary using raw roman input
+        if state.enablePinyinLookup, let inputRange {
+            let romanInput = composingText.rawRomanInput
+            let startIndex = inputRange.startIndex
+            let searchLength = min(self.maxlength, romanInput.count - startIndex)
+
+            if searchLength > 0 {
+                // Search for pinyin matches at various lengths
+                let pinyinResults = self.pinyinSearchWithLength(
+                    romanInput: romanInput,
+                    startIndex: startIndex,
+                    maxLength: searchLength,
+                    state: state
+                )
+
+                for (element, pinyinLength) in pinyinResults {
+                    // Calculate the end index in input space
+                    let endInputIndex = startIndex + pinyinLength - 1
+                    if endInputIndex < composingText.input.count {
+                        let range: Lattice.LatticeRange = .input(from: startIndex, to: endInputIndex + 1)
+                        let node = LatticeNode(data: element, range: range)
+                        if needBOS {
+                            node.prevs.append(RegisteredNode.BOSNode())
+                        }
+                        latticeNodes.append(node)
+                    }
+                }
+            }
+        }
+
         return latticeNodes
     }
 
