@@ -49,6 +49,163 @@ HIRAGANA_TO_ROMAJI = {
     'っ': 'tt',  # Double consonant marker
 }
 
+# Traditional to Simplified Chinese character mapping
+# Japanese uses traditional characters (or Shinjitai), but the phrase dictionary uses simplified
+TRAD_TO_SIMP = {
+    # Common characters that differ between traditional and simplified
+    '銀': '银', '銀': '银', '東': '东', '國': '国', '國': '国',
+    '學': '学', '會': '会', '經': '经', '業': '业', '電': '电',
+    '車': '车', '機': '机', '場': '场', '開': '开', '關': '关',
+    '門': '门', '間': '间', '時': '时', '書': '书', '長': '长',
+    '張': '张', '馬': '马', '魚': '鱼', '鳥': '鸟', '龍': '龙',
+    '風': '风', '飛': '飞', '體': '体', '頭': '头', '臉': '脸',
+    '見': '见', '視': '视', '觀': '观', '說': '说', '話': '话',
+    '語': '语', '讀': '读', '認': '认', '識': '识', '記': '记',
+    '計': '计', '設': '设', '許': '许', '論': '论', '議': '议',
+    '護': '护', '報': '报', '發': '发', '對': '对', '專': '专',
+    '導': '导', '將': '将', '廣': '广', '當': '当', '準': '准',
+    '進': '进', '過': '过', '運': '运', '還': '还', '連': '连',
+    '選': '选', '達': '达', '遠': '远', '邊': '边', '這': '这',
+    '裡': '里', '裏': '里', '處': '处', '號': '号', '線': '线',
+    '紅': '红', '綠': '绿', '結': '结', '給': '给', '統': '统',
+    '繼': '继', '續': '续', '織': '织', '終': '终', '練': '练',
+    '總': '总', '約': '约', '紙': '纸', '級': '级', '細': '细',
+    '納': '纳', '組': '组', '經': '经', '繩': '绑', '緊': '紧',
+    '縣': '县', '區': '区', '醫': '医', '藥': '药', '農': '农',
+    '寫': '写', '實': '实', '寶': '宝', '審': '审', '宮': '宫',
+    '賣': '卖', '買': '买', '質': '质', '貨': '货', '責': '责',
+    '貴': '贵', '費': '费', '資': '资', '賞': '赏', '賀': '贺',
+    '貿': '贸', '財': '财', '貧': '贫', '販': '贩', '購': '购',
+    '賊': '贼', '貸': '贷', '賴': '赖', '賢': '贤', '賤': '贱',
+    '勞': '劳', '動': '动', '勸': '劝', '務': '务', '勝': '胜',
+    '勢': '势', '團': '团', '園': '园', '圖': '图', '圍': '围',
+    '點': '点', '黨': '党', '聽': '听', '聲': '声', '聯': '联',
+    '職': '职', '陽': '阳', '陰': '阴', '際': '际', '隊': '队',
+    '階': '阶', '險': '险', '雜': '杂', '難': '难', '雲': '云',
+    '電': '电', '霧': '雾', '靈': '灵', '靜': '静', '鐵': '铁',
+    '錢': '钱', '鋼': '钢', '錄': '录', '鏡': '镜', '針': '针',
+    '鑒': '鉴', '錯': '错', '鍵': '键', '鎮': '镇', '鐘': '钟',
+    '門': '门', '開': '开', '閉': '闭', '關': '关', '閱': '阅',
+    '闘': '斗', '鬥': '斗', '鬪': '斗',
+    '佛': '佛', '價': '价', '個': '个', '傳': '传', '備': '备',
+    '優': '优', '儀': '仪', '億': '亿', '僅': '仅', '傷': '伤',
+    '倉': '仓', '創': '创', '劃': '划', '劇': '剧', '則': '则',
+    '剛': '刚', '別': '别', '刪': '删', '劉': '刘', '勵': '励',
+    '華': '华', '衛': '卫', '廳': '厅', '廠': '厂', '壓': '压',
+    '雙': '双', '變': '变', '叢': '丛', '葉': '叶', '號': '号',
+    '臺': '台', '喬': '乔', '嚴': '严', '囑': '嘱', '聯': '联',
+    '戰': '战', '戲': '戏', '戀': '恋', '態': '态', '愛': '爱',
+    '憶': '忆', '懷': '怀', '惡': '恶', '慶': '庆', '應': '应',
+    '憲': '宪', '懸': '悬', '懼': '惧', '戶': '户', '擔': '担',
+    '據': '据', '擁': '拥', '擊': '击', '擬': '拟', '擴': '扩',
+    '摯': '挚', '撐': '撑', '損': '损', '換': '换', '搶': '抢',
+    '擇': '择', '撫': '抚', '搗': '捣', '撲': '扑', '擺': '摆',
+    '攝': '摄', '攬': '揽', '攜': '携', '攻': '攻', '敗': '败',
+    '敘': '叙', '數': '数', '斷': '断', '條': '条', '極': '极',
+    '構': '构', '標': '标', '棟': '栋', '橋': '桥', '機': '机',
+    '檔': '档', '檢': '检', '權': '权', '歐': '欧', '歲': '岁',
+    '歷': '历', '殘': '残', '殺': '杀', '毀': '毁', '氣': '气',
+    '氫': '氢', '決': '决', '況': '况', '沒': '没', '濟': '济',
+    '濃': '浓', '測': '测', '減': '减', '溫': '温', '滅': '灭',
+    '準': '准', '滿': '满', '漢': '汉', '漸': '渐', '潔': '洁',
+    '潛': '潜', '潰': '溃', '滬': '沪', '濟': '济', '濱': '滨',
+    '瀏': '浏', '灣': '湾', '災': '灾', '燈': '灯', '燃': '燃',
+    '爺': '爷', '爾': '尔', '牆': '墙', '猶': '犹', '獨': '独',
+    '獲': '获', '獎': '奖', '獻': '献', '環': '环', '現': '现',
+    '產': '产', '異': '异', '疊': '叠', '療': '疗', '發': '发',
+    '盜': '盗', '監': '监', '鹽': '盐', '盡': '尽', '眾': '众',
+    '睜': '睁', '瞭': '了', '礎': '础', '祿': '禄', '禮': '礼',
+    '稅': '税', '穩': '稳', '種': '种', '積': '积', '競': '竞',
+    '筆': '笔', '節': '节', '範': '范', '築': '筑', '篤': '笃',
+    '簡': '简', '籠': '笼', '類': '类', '粵': '粤', '絕': '绝',
+    '絲': '丝', '編': '编', '緒': '绪', '練': '练', '繁': '繁',
+    '縮': '缩', '繪': '绘', '義': '义', '習': '习', '翻': '翻',
+    '耐': '耐', '聖': '圣', '職': '职', '腦': '脑', '腸': '肠',
+    '膠': '胶', '膽': '胆', '臨': '临', '舉': '举', '舊': '旧',
+    '舖': '铺', '艦': '舰', '艱': '艰', '芻': '刍', '範': '范',
+    '莊': '庄', '華': '华', '萬': '万', '葛': '葛', '蒙': '蒙',
+    '蓋': '盖', '蔣': '蒋', '藍': '蓝', '藝': '艺', '蘇': '苏',
+    '處': '处', '虛': '虚', '號': '号', '蟲': '虫', '蠟': '蜡',
+    '術': '术', '衛': '卫', '裝': '装', '製': '制', '複': '复',
+    '褲': '裤', '親': '亲', '覺': '觉', '訊': '讯', '訓': '训',
+    '記': '记', '訪': '访', '設': '设', '評': '评', '詞': '词',
+    '詢': '询', '試': '试', '詩': '诗', '話': '话', '該': '该',
+    '詳': '详', '誌': '志', '認': '认', '誠': '诚', '語': '语',
+    '誤': '误', '說': '说', '課': '课', '調': '调', '談': '谈',
+    '請': '请', '論': '论', '諸': '诸', '謀': '谋', '謂': '谓',
+    '講': '讲', '謝': '谢', '謹': '谨', '證': '证', '識': '识',
+    '譜': '谱', '警': '警', '議': '议', '譯': '译', '護': '护',
+    '讓': '让', '讀': '读', '變': '变', '豐': '丰', '貝': '贝',
+    '負': '负', '貢': '贡', '貪': '贪', '貫': '贯', '責': '责',
+    '貯': '贮', '貳': '贰', '貴': '贵', '貶': '贬', '貸': '贷',
+    '費': '费', '貿': '贸', '賀': '贺', '賁': '贲', '賃': '赁',
+    '賄': '贿', '資': '资', '賈': '贾', '賊': '贼', '賓': '宾',
+    '賜': '赐', '賞': '赏', '賠': '赔', '賢': '贤', '賣': '卖',
+    '賤': '贱', '賦': '赋', '質': '质', '賬': '账', '賴': '赖',
+    '賺': '赚', '購': '购', '賽': '赛', '贅': '赘', '贈': '赠',
+    '贊': '赞', '贏': '赢', '贓': '赃', '趙': '赵', '趕': '赶',
+    '趨': '趋', '跡': '迹', '跨': '跨', '跳': '跳', '踐': '践',
+    '踴': '踊', '蹟': '迹', '軀': '躯', '車': '车', '軌': '轨',
+    '軍': '军', '軒': '轩', '軟': '软', '較': '较', '載': '载',
+    '輔': '辅', '輕': '轻', '輛': '辆', '輝': '辉', '輩': '辈',
+    '輪': '轮', '輸': '输', '轄': '辖', '轉': '转', '轍': '辙',
+    '轟': '轰', '辦': '办', '辭': '辞', '農': '农', '迴': '回',
+    '逕': '径', '這': '这', '過': '过', '達': '达', '違': '违',
+    '遙': '遥', '遜': '逊', '遞': '递', '遠': '远', '適': '适',
+    '遲': '迟', '遷': '迁', '選': '选', '遺': '遗', '還': '还',
+    '邁': '迈', '邊': '边', '邏': '逻', '郵': '邮', '鄉': '乡',
+    '鄭': '郑', '鄰': '邻', '醜': '丑', '醫': '医', '醬': '酱',
+    '釀': '酿', '釋': '释', '針': '针', '鈴': '铃', '鉀': '钾',
+    '鉅': '钜', '鉛': '铅', '鉢': '钵', '鉤': '钩', '銅': '铜',
+    '銘': '铭', '銳': '锐', '銷': '销', '鋁': '铝', '鋒': '锋',
+    '鋪': '铺', '鋼': '钢', '錄': '录', '錘': '锤', '錢': '钱',
+    '錦': '锦', '錨': '锚', '錫': '锡', '錯': '错', '鍊': '链',
+    '鍋': '锅', '鍵': '键', '鍾': '钟', '鎖': '锁', '鎮': '镇',
+    '鏡': '镜', '鏢': '镖', '鐘': '钟', '鐵': '铁', '鑄': '铸',
+    '鑑': '鉴', '鑒': '鉴', '鑰': '钥', '鑽': '钻', '長': '长',
+    '門': '门', '閃': '闪', '閉': '闭', '開': '开', '閏': '闰',
+    '閑': '闲', '間': '间', '閘': '闸', '閣': '阁', '閥': '阀',
+    '閱': '阅', '闆': '板', '闈': '闱', '闊': '阔', '闌': '阑',
+    '闔': '阖', '闘': '斗', '關': '关', '闡': '阐', '防': '防',
+    '阮': '阮', '陣': '阵', '陰': '阴', '陳': '陈', '陸': '陆',
+    '陽': '阳', '隊': '队', '階': '阶', '隔': '隔', '際': '际',
+    '隨': '随', '險': '险', '隱': '隐', '隻': '只', '雖': '虽',
+    '雙': '双', '雜': '杂', '雞': '鸡', '離': '离', '難': '难',
+    '雲': '云', '電': '电', '霧': '雾', '露': '露', '靈': '灵',
+    '青': '青', '靜': '静', '靠': '靠', '頁': '页', '頂': '顶',
+    '項': '项', '順': '顺', '須': '须', '頌': '颂', '預': '预',
+    '頑': '顽', '頒': '颁', '領': '领', '頗': '颇', '頭': '头',
+    '頰': '颊', '頸': '颈', '頻': '频', '頹': '颓', '顆': '颗',
+    '題': '题', '額': '额', '顏': '颜', '願': '愿', '類': '类',
+    '顧': '顾', '顯': '显', '風': '风', '颱': '台', '飄': '飘',
+    '飛': '飞', '飢': '饥', '飲': '饮', '飼': '饲', '飽': '饱',
+    '飾': '饰', '餃': '饺', '養': '养', '餐': '餐', '餘': '余',
+    '餅': '饼', '餓': '饿', '館': '馆', '餞': '饯', '餡': '馅',
+    '饅': '馒', '饑': '饥', '首': '首', '馬': '马', '駁': '驳',
+    '駐': '驻', '駕': '驾', '駛': '驶', '駝': '驼', '駿': '骏',
+    '騎': '骑', '騙': '骗', '騷': '骚', '驅': '驱', '驗': '验',
+    '驚': '惊', '體': '体', '髮': '发', '鬆': '松', '鬥': '斗',
+    '鬧': '闹', '鬱': '郁', '魚': '鱼', '魯': '鲁', '鮮': '鲜',
+    '鯨': '鲸', '鰭': '鳍', '鱗': '鳞', '鳥': '鸟', '鳳': '凤',
+    '鴉': '鸦', '鴕': '鸵', '鴻': '鸿', '鵑': '鹃', '鵝': '鹅',
+    '鷗': '鸥', '鷹': '鹰', '鸚': '鹦', '鹹': '咸', '鹿': '鹿',
+    '麥': '麦', '麵': '面', '麼': '么', '黃': '黄', '黑': '黑',
+    '點': '点', '黨': '党', '鼓': '鼓', '鼠': '鼠', '齊': '齐',
+    '齒': '齿', '齡': '龄', '龍': '龙', '龜': '龟',
+    # Japanese specific (Shinjitai)
+    '駅': '驿', '桜': '樱', '芸': '艺', '売': '卖', '読': '读',
+    '単': '单', '営': '营', '実': '实', '写': '写', '学': '学',
+    '挙': '举', '覚': '觉', '観': '观', '気': '气', '戦': '战',
+    '県': '县', '対': '对', '図': '图', '変': '变', '応': '应',
+    '医': '医', '歴': '历', '旧': '旧', '帰': '归', '広': '广',
+    '悪': '恶', '画': '画', '発': '发', '鉄': '铁', '塩': '盐',
+}
+
+
+def to_simplified(text: str) -> str:
+    """Convert traditional/Japanese characters to simplified Chinese."""
+    return ''.join(TRAD_TO_SIMP.get(c, c) for c in text)
+
 
 def download_phrase_pinyin_data(output_dir: Path) -> tuple[Path, Path]:
     """
@@ -118,14 +275,15 @@ def remove_tone_marks(pinyin: str) -> str:
     return result
 
 
-def load_phrase_pinyin(phrase_file: Path) -> dict[str, str]:
+def load_phrase_pinyin(phrase_file: Path) -> tuple[dict[str, str], int]:
     """
     Load word/phrase to pinyin mapping from phrase-pinyin-data.
 
     Format: 词语: pīn yīn
-    Returns dict mapping word -> pinyin (without tones, spaces removed)
+    Returns tuple of (dict mapping word -> pinyin (without tones, spaces removed), max phrase length)
     """
     phrase_to_pinyin = {}
+    max_len = 0
 
     print(f"Loading phrase pinyin from {phrase_file}...")
 
@@ -144,9 +302,10 @@ def load_phrase_pinyin(phrase_file: Path) -> dict[str, str]:
             # Remove tone marks and spaces
             pinyin_clean = remove_tone_marks(pinyin_with_tones.replace(' ', ''))
             phrase_to_pinyin[phrase] = pinyin_clean
+            max_len = max(max_len, len(phrase))
 
-    print(f"Loaded {len(phrase_to_pinyin)} phrase-to-pinyin mappings")
-    return phrase_to_pinyin
+    print(f"Loaded {len(phrase_to_pinyin)} phrase-to-pinyin mappings, max length: {max_len}")
+    return phrase_to_pinyin, max_len
 
 
 def load_char_pinyin(char_file: Path) -> dict[str, str]:
@@ -341,17 +500,45 @@ def extract_japanese_dictionary(dict_dir: Path) -> list[tuple[str, str, int, int
     return entries
 
 
+def lookup_phrase(phrase: str, phrase_to_pinyin: dict[str, str]) -> Optional[str]:
+    """
+    Look up a phrase in the dictionary, trying both original and simplified forms.
+
+    Returns pinyin if found, None otherwise.
+    """
+    # Try original form first
+    if phrase in phrase_to_pinyin:
+        return phrase_to_pinyin[phrase]
+
+    # Try simplified Chinese form
+    simplified = to_simplified(phrase)
+    if simplified != phrase and simplified in phrase_to_pinyin:
+        return phrase_to_pinyin[simplified]
+
+    return None
+
+
 def generate_pinyin_for_word(
     word: str,
     phrase_to_pinyin: dict[str, str],
-    char_to_pinyin: dict[str, str]
+    char_to_pinyin: dict[str, str],
+    max_phrase_len: int = 20
 ) -> Optional[str]:
     """
-    Generate pinyin for a word containing kanji and/or hiragana.
+    Generate pinyin for a word using maximum forward matching algorithm.
 
-    Priority:
-    1. Direct phrase lookup (handles multi-pronunciation characters correctly)
-    2. Character-by-character lookup as fallback
+    Algorithm:
+    1. If entire word is in phrase dictionary, return directly
+    2. Otherwise, scan from left to right, matching longest subword in phrase dictionary
+    3. Unmatched characters fall back to single-character lookup
+
+    Note: Both traditional (Japanese) and simplified Chinese forms are tried
+    when looking up in the phrase dictionary.
+
+    Example:
+        "築地小劇場" not in dictionary
+        → Match "築地" (zhudi) + "小劇場" (xiaojuchang)
+        → Result: "zhudixiaojuchang"
 
     - Kanji: converted to pinyin
     - Hiragana: converted to romaji
@@ -363,44 +550,61 @@ def generate_pinyin_for_word(
     if not any(is_kanji(c) for c in word):
         return None
 
-    # Priority 1: Direct phrase lookup
-    # This handles multi-pronunciation characters correctly (e.g., 地 -> di in 築地)
-    if word in phrase_to_pinyin:
-        return phrase_to_pinyin[word]
+    # Fast path: entire word in phrase dictionary (try both traditional and simplified)
+    pinyin = lookup_phrase(word, phrase_to_pinyin)
+    if pinyin:
+        return pinyin
 
-    # Priority 2: Character-by-character lookup
-    pinyin_parts = []
+    # Maximum forward matching algorithm
+    result = []
+    pos = 0
 
-    for char in word:
-        if char in char_to_pinyin:
-            # Kanji with pinyin mapping
-            pinyin_parts.append(char_to_pinyin[char])
-        elif is_hiragana(char) and char in HIRAGANA_TO_ROMAJI:
-            # Hiragana converted to romaji
-            pinyin_parts.append(HIRAGANA_TO_ROMAJI[char])
-        elif is_kanji(char):
-            # Kanji without pinyin mapping - skip entire word
-            return None
-        else:
-            # Other characters (katakana, punctuation) - skip entire word
-            return None
+    while pos < len(word):
+        matched = False
 
-    if not pinyin_parts:
-        return None
+        # Try matching longest subword first (from max_phrase_len down to 2)
+        max_len = min(len(word) - pos, max_phrase_len)
+        for length in range(max_len, 1, -1):
+            candidate = word[pos:pos + length]
+            # Try both traditional and simplified forms
+            pinyin = lookup_phrase(candidate, phrase_to_pinyin)
+            if pinyin:
+                result.append(pinyin)
+                pos += length
+                matched = True
+                break
 
-    return ''.join(pinyin_parts)
+        # Single character fallback
+        if not matched:
+            char = word[pos]
+            if char in char_to_pinyin:
+                # Kanji with pinyin mapping
+                result.append(char_to_pinyin[char])
+            elif is_hiragana(char) and char in HIRAGANA_TO_ROMAJI:
+                # Hiragana converted to romaji
+                result.append(HIRAGANA_TO_ROMAJI[char])
+            elif is_kanji(char):
+                # Kanji without pinyin mapping - skip entire word
+                return None
+            else:
+                # Other characters (katakana, punctuation) - skip entire word
+                return None
+            pos += 1
+
+    return ''.join(result) if result else None
 
 
 def generate_pinyin_entries(
     japanese_entries: list[tuple[str, str, int, int, int, float]],
     phrase_to_pinyin: dict[str, str],
-    char_to_pinyin: dict[str, str]
+    char_to_pinyin: dict[str, str],
+    max_phrase_len: int = 20
 ) -> list[tuple[str, str, int, int, int, float]]:
     """
     Generate pinyin dictionary entries from Japanese dictionary entries.
 
     For each Japanese entry with kanji word:
-    1. Look up pinyin (phrase-level first, then character-by-character)
+    1. Look up pinyin using maximum forward matching (subword matching)
     2. Create new entry with pinyin as key, kanji as value
     3. Keep the entry with the best (highest) score for each (pinyin, word) pair
     """
@@ -409,6 +613,7 @@ def generate_pinyin_entries(
 
     print("Generating pinyin entries from Japanese dictionary...")
     phrase_hits = 0
+    subword_hits = 0
     char_hits = 0
 
     # Process Japanese dictionary entries
@@ -417,11 +622,14 @@ def generate_pinyin_entries(
         if not any(is_kanji(c) for c in word):
             continue
 
-        # Check if word exists in phrase dictionary (for stats)
-        is_phrase_hit = word in phrase_to_pinyin
+        # Categorize match type for stats
+        if word in phrase_to_pinyin:
+            match_type = 'phrase'
+        else:
+            match_type = 'other'
 
         # Generate pinyin for the word
-        pinyin = generate_pinyin_for_word(word, phrase_to_pinyin, char_to_pinyin)
+        pinyin = generate_pinyin_for_word(word, phrase_to_pinyin, char_to_pinyin, max_phrase_len)
 
         if pinyin and pinyin.isascii() and pinyin.islower():
             key = (pinyin, word)
@@ -433,15 +641,27 @@ def generate_pinyin_entries(
                 best_entries[key] = (pinyin, word, lcid, rcid, mid, adjusted_score)
 
             # Track stats
-            if is_phrase_hit:
+            if match_type == 'phrase':
                 phrase_hits += 1
             else:
-                char_hits += 1
+                # Check if subword matching was used (word not in phrase dict but has multi-char submatches)
+                # Simple heuristic: if any 2+ char substring is in phrase dict
+                has_subword = any(
+                    word[i:i+l] in phrase_to_pinyin
+                    for i in range(len(word))
+                    for l in range(2, len(word) - i + 1)
+                    if i + l <= len(word)
+                )
+                if has_subword:
+                    subword_hits += 1
+                else:
+                    char_hits += 1
 
     pinyin_entries = list(best_entries.values())
     print(f"Generated {len(pinyin_entries)} pinyin entries from Japanese dictionary")
-    print(f"  - Phrase-level pinyin: {phrase_hits} hits")
-    print(f"  - Character-level pinyin: {char_hits} hits")
+    print(f"  - Full phrase matches: {phrase_hits}")
+    print(f"  - Subword matches: {subword_hits}")
+    print(f"  - Character-only matches: {char_hits}")
     print(f"Total pinyin entries: {len(pinyin_entries)}")
 
     return pinyin_entries
@@ -734,14 +954,14 @@ def main():
     phrase_file, char_file = download_phrase_pinyin_data(args.output.parent)
 
     # Step 2: Load pinyin data
-    phrase_to_pinyin = load_phrase_pinyin(phrase_file)
+    phrase_to_pinyin, max_phrase_len = load_phrase_pinyin(phrase_file)
     char_to_pinyin = load_char_pinyin(char_file)
 
     # Step 3: Extract entries from Japanese dictionary
     japanese_entries = extract_japanese_dictionary(args.dict_dir)
 
-    # Step 4: Generate pinyin entries
-    pinyin_entries = generate_pinyin_entries(japanese_entries, phrase_to_pinyin, char_to_pinyin)
+    # Step 4: Generate pinyin entries (using maximum forward matching for subword matching)
+    pinyin_entries = generate_pinyin_entries(japanese_entries, phrase_to_pinyin, char_to_pinyin, max_phrase_len)
 
     # Step 5: Write TSV
     tsv_file = args.output / "pinyin_dictionary.tsv"
