@@ -620,7 +620,13 @@ def main():
         "--output", "-o",
         type=Path,
         default=Path(__file__).parent.parent / "Sources" / "KanaKanjiConverterModuleWithDefaultDictionary" / "PinyinDictionary" / "louds",
-        help="Output directory for dictionary files"
+        help="Output directory for pinyin dictionary files"
+    )
+    parser.add_argument(
+        "--dict-dir", "-d",
+        type=Path,
+        default=Path(__file__).parent.parent / "Sources" / "KanaKanjiConverterModuleWithDefaultDictionary" / "azooKey_dictionary_storage" / "Dictionary" / "louds",
+        help="Source directory containing Japanese dictionary files (.loudstxt3)"
     )
     parser.add_argument(
         "--unihan", "-u",
@@ -646,7 +652,7 @@ def main():
     char_to_pinyin = load_unihan_mandarin(unihan_file)
 
     # Step 2: Extract entries from Japanese dictionary
-    japanese_entries = extract_japanese_dictionary(args.output)
+    japanese_entries = extract_japanese_dictionary(args.dict_dir)
 
     # Step 3: Generate pinyin entries
     pinyin_entries = generate_pinyin_entries(japanese_entries, char_to_pinyin)
@@ -657,7 +663,7 @@ def main():
 
     # Step 5: Build LOUDS dictionary
     if not args.tsv_only:
-        char_id_file = args.output / "charID.chid"
+        char_id_file = args.dict_dir / "charID.chid"
         build_louds_dictionary(tsv_file, args.output, char_id_file=char_id_file)
 
     print("\nDone! Dictionary files created:")
