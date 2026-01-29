@@ -619,7 +619,7 @@ def main():
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path(__file__).parent.parent / "AzooKeyKanaKanjiConverter" / "Sources" / "KanaKanjiConverterModuleWithDefaultDictionary" / "azooKey_dictionary_storage" / "Dictionary" / "louds",
+        default=Path(__file__).parent.parent / "Sources" / "KanaKanjiConverterModuleWithDefaultDictionary" / "PinyinDictionary" / "louds",
         help="Output directory for dictionary files"
     )
     parser.add_argument(
