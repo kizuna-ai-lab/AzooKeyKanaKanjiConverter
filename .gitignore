@@ -25,3 +25,6 @@ Package.resolved
 Unihan_Readings.txt
 Unihan.zip
 build_pinyin_dict.swift
+large_pinyin.txt
+char_pinyin.txt
+pinyin.txt

@@ -4,25 +4,25 @@ Generate Pinyin Dictionary for XiaoLiIME Hybrid Input Mode
 
 This script creates a pinyin-to-kanji dictionary by:
 1. Extracting kanji words from the existing Japanese dictionary (.loudstxt3 files)
-2. Looking up Chinese pinyin for each kanji character using Unihan database
-3. Generating pinyin entries for the extracted kanji words
+2. Looking up Chinese pinyin using phrase-pinyin-data (words and characters)
+3. Generating pinyin entries with correct multi-character word pronunciations
+
+Data source: https://github.com/mozillazg/phrase-pinyin-data
+- Provides word-level pinyin (handles multi-pronunciation characters correctly)
+- Falls back to single-character pinyin for words not in the phrase dictionary
 
 Usage:
-    python generate_pinyin_dict.py [--output OUTPUT_DIR] [--unihan UNIHAN_FILE]
+    python generate_pinyin_dict.py [--output OUTPUT_DIR]
 """
 
 import argparse
-import os
 import re
 import struct
 import subprocess
 import sys
 import unicodedata
-from collections import defaultdict
 from pathlib import Path
 from typing import Optional
-from urllib.request import urlretrieve
-import zipfile
 
 
 # Hiragana to romaji mapping
@@ -50,86 +50,154 @@ HIRAGANA_TO_ROMAJI = {
 }
 
 
-def download_unihan(output_dir: Path) -> Path:
-    """Download the Unihan database if not present."""
-    unihan_file = output_dir / "Unihan_Readings.txt"
+def download_phrase_pinyin_data(output_dir: Path) -> tuple[Path, Path]:
+    """
+    Download pinyin data files from GitHub.
 
-    if unihan_file.exists():
-        print(f"Unihan_Readings.txt already exists at {unihan_file}")
-        return unihan_file
+    Returns (phrase_file, char_file) paths.
 
-    # Try downloading with curl (more reliable than urllib)
-    url = "https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip"
-    zip_file = output_dir / "Unihan.zip"
+    Data sources:
+    - phrase-pinyin-data: word/phrase level pinyin (handles multi-pronunciation correctly)
+    - pinyin-data: single character pinyin (fallback for characters not in phrase dict)
+    """
+    # Word/phrase pinyin (large_pinyin.txt ~9MB, contains phrases from multiple sources)
+    phrase_file = output_dir / "large_pinyin.txt"
+    phrase_url = "https://raw.githubusercontent.com/mozillazg/phrase-pinyin-data/master/large_pinyin.txt"
 
-    print(f"Downloading Unihan database from {url}...")
-    try:
-        result = subprocess.run(
-            ['curl', '-L', '-A', 'Mozilla/5.0', '-o', str(zip_file), url],
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            raise Exception(f"curl failed: {result.stderr}")
+    # Single character pinyin from pinyin-data repository
+    # pinyin.txt contains character -> pinyin mappings with most common pronunciation
+    char_file = output_dir / "char_pinyin.txt"
+    char_url = "https://raw.githubusercontent.com/mozillazg/pinyin-data/master/pinyin.txt"
 
-        # Extract
-        with zipfile.ZipFile(zip_file, 'r') as zf:
-            for name in zf.namelist():
-                if "Unihan_Readings.txt" in name:
-                    zf.extract(name, output_dir)
-                    extracted = output_dir / name
-                    if extracted != unihan_file:
-                        extracted.rename(unihan_file)
-                    break
+    downloads = [
+        ("large_pinyin.txt", phrase_file, phrase_url),
+        ("char_pinyin.txt", char_file, char_url),
+    ]
 
-        zip_file.unlink()
-        print(f"Extracted Unihan_Readings.txt")
-        return unihan_file
-    except Exception as e:
-        print(f"Error downloading Unihan: {e}")
-        print("Please manually download from https://www.unicode.org/Public/UCD/latest/ucd/Unihan.zip")
-        sys.exit(1)
+    for filename, filepath, url in downloads:
+        if filepath.exists():
+            print(f"{filename} already exists at {filepath}")
+            continue
+
+        print(f"Downloading {filename} from {url}...")
+
+        try:
+            result = subprocess.run(
+                ['curl', '-L', '-A', 'Mozilla/5.0', '-o', str(filepath), url],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                raise Exception(f"curl failed: {result.stderr}")
+            print(f"Downloaded {filename}")
+        except Exception as e:
+            print(f"Error downloading {filename}: {e}")
+            print(f"Please manually download from {url}")
+            sys.exit(1)
+
+    return phrase_file, char_file
 
 
-def load_unihan_mandarin(unihan_file: Path) -> dict[str, str]:
-    """Load character to Mandarin pinyin mapping from Unihan database."""
+def remove_tone_marks(pinyin: str) -> str:
+    """Remove pinyin tone marks and convert to base letters."""
+    tone_map = {
+        'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
+        'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
+        'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
+        'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
+        'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
+        'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v', 'ü': 'v',
+        'ń': 'n', 'ň': 'n', 'ǹ': 'n',
+        'ḿ': 'm',
+    }
+    result = pinyin.lower()
+    for tone, base in tone_map.items():
+        result = result.replace(tone, base)
+    # Also remove numeric tone markers (1-5)
+    result = re.sub(r'[1-5]', '', result)
+    return result
+
+
+def load_phrase_pinyin(phrase_file: Path) -> dict[str, str]:
+    """
+    Load word/phrase to pinyin mapping from phrase-pinyin-data.
+
+    Format: 词语: pīn yīn
+    Returns dict mapping word -> pinyin (without tones, spaces removed)
+    """
+    phrase_to_pinyin = {}
+
+    print(f"Loading phrase pinyin from {phrase_file}...")
+
+    with open(phrase_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or ': ' not in line:
+                continue
+
+            # Format: "词语: pīn yīn"
+            parts = line.split(': ', 1)
+            if len(parts) != 2:
+                continue
+
+            phrase, pinyin_with_tones = parts
+            # Remove tone marks and spaces
+            pinyin_clean = remove_tone_marks(pinyin_with_tones.replace(' ', ''))
+            phrase_to_pinyin[phrase] = pinyin_clean
+
+    print(f"Loaded {len(phrase_to_pinyin)} phrase-to-pinyin mappings")
+    return phrase_to_pinyin
+
+
+def load_char_pinyin(char_file: Path) -> dict[str, str]:
+    """
+    Load single character to pinyin mapping from mozillazg/pinyin-data.
+
+    This file contains the most commonly used pronunciation for each character,
+    which is better than Unihan's arbitrary first pronunciation.
+
+    Format: U+XXXX: pīn1,pīn2,...  # 字
+    Returns dict mapping char -> pinyin (without tones)
+    """
     char_to_pinyin = {}
 
-    print(f"Loading Unihan Mandarin readings from {unihan_file}...")
+    print(f"Loading character pinyin from {char_file}...")
 
-    with open(unihan_file, 'r', encoding='utf-8') as f:
+    with open(char_file, 'r', encoding='utf-8') as f:
         for line in f:
-            if line.startswith('#') or not line.strip():
+            line = line.strip()
+            if not line or line.startswith('#'):
                 continue
 
-            parts = line.strip().split('\t')
-            if len(parts) < 3:
+            # Format: U+XXXX: pīn1,pīn2,...  # 字
+            if not line.startswith('U+'):
                 continue
 
-            codepoint, field, value = parts[0], parts[1], parts[2]
+            # Split by colon to get codepoint and pinyin part
+            if ': ' not in line:
+                continue
 
-            # We want kMandarin field for Mandarin Chinese pronunciation
-            if field == 'kMandarin':
-                if codepoint.startswith('U+'):
-                    try:
-                        char = chr(int(codepoint[2:], 16))
-                        # Take the first pronunciation, remove tone numbers
-                        pinyin = value.split()[0].lower()
-                        pinyin = re.sub(r'[1-5]', '', pinyin)
-                        # Convert tone marks to base letters
-                        tone_map = {
-                            'ā': 'a', 'á': 'a', 'ǎ': 'a', 'à': 'a',
-                            'ē': 'e', 'é': 'e', 'ě': 'e', 'è': 'e',
-                            'ī': 'i', 'í': 'i', 'ǐ': 'i', 'ì': 'i',
-                            'ō': 'o', 'ó': 'o', 'ǒ': 'o', 'ò': 'o',
-                            'ū': 'u', 'ú': 'u', 'ǔ': 'u', 'ù': 'u',
-                            'ǖ': 'v', 'ǘ': 'v', 'ǚ': 'v', 'ǜ': 'v', 'ü': 'v',
-                        }
-                        for tone, base in tone_map.items():
-                            pinyin = pinyin.replace(tone, base)
-                        char_to_pinyin[char] = pinyin
-                    except (ValueError, OverflowError):
-                        pass
+            codepoint_part, rest = line.split(': ', 1)
+
+            # Remove comment if present
+            if '#' in rest:
+                pinyin_part = rest.split('#')[0].strip()
+            else:
+                pinyin_part = rest.strip()
+
+            # Convert codepoint to character
+            try:
+                codepoint = int(codepoint_part[2:], 16)
+                char = chr(codepoint)
+            except (ValueError, OverflowError):
+                continue
+
+            # Take first pronunciation if multiple (comma-separated)
+            first_pinyin = pinyin_part.split(',')[0].strip()
+            pinyin_clean = remove_tone_marks(first_pinyin)
+
+            if pinyin_clean:
+                char_to_pinyin[char] = pinyin_clean
 
     print(f"Loaded {len(char_to_pinyin)} character-to-pinyin mappings")
     return char_to_pinyin
@@ -273,9 +341,17 @@ def extract_japanese_dictionary(dict_dir: Path) -> list[tuple[str, str, int, int
     return entries
 
 
-def generate_pinyin_for_word(word: str, char_to_pinyin: dict[str, str]) -> Optional[str]:
+def generate_pinyin_for_word(
+    word: str,
+    phrase_to_pinyin: dict[str, str],
+    char_to_pinyin: dict[str, str]
+) -> Optional[str]:
     """
     Generate pinyin for a word containing kanji and/or hiragana.
+
+    Priority:
+    1. Direct phrase lookup (handles multi-pronunciation characters correctly)
+    2. Character-by-character lookup as fallback
 
     - Kanji: converted to pinyin
     - Hiragana: converted to romaji
@@ -283,11 +359,17 @@ def generate_pinyin_for_word(word: str, char_to_pinyin: dict[str, str]) -> Optio
 
     Returns None if word cannot be converted.
     """
-    pinyin_parts = []
-
     # Must contain at least one kanji to be useful
     if not any(is_kanji(c) for c in word):
         return None
+
+    # Priority 1: Direct phrase lookup
+    # This handles multi-pronunciation characters correctly (e.g., 地 -> di in 築地)
+    if word in phrase_to_pinyin:
+        return phrase_to_pinyin[word]
+
+    # Priority 2: Character-by-character lookup
+    pinyin_parts = []
 
     for char in word:
         if char in char_to_pinyin:
@@ -297,10 +379,10 @@ def generate_pinyin_for_word(word: str, char_to_pinyin: dict[str, str]) -> Optio
             # Hiragana converted to romaji
             pinyin_parts.append(HIRAGANA_TO_ROMAJI[char])
         elif is_kanji(char):
-            # Kanji without pinyin mapping - skip
+            # Kanji without pinyin mapping - skip entire word
             return None
         else:
-            # Other characters (katakana, punctuation) - skip
+            # Other characters (katakana, punctuation) - skip entire word
             return None
 
     if not pinyin_parts:
@@ -311,21 +393,23 @@ def generate_pinyin_for_word(word: str, char_to_pinyin: dict[str, str]) -> Optio
 
 def generate_pinyin_entries(
     japanese_entries: list[tuple[str, str, int, int, int, float]],
+    phrase_to_pinyin: dict[str, str],
     char_to_pinyin: dict[str, str]
 ) -> list[tuple[str, str, int, int, int, float]]:
     """
     Generate pinyin dictionary entries from Japanese dictionary entries.
 
     For each Japanese entry with kanji word:
-    1. Look up pinyin for each kanji character
-    2. Concatenate to form the pinyin reading
-    3. Create new entry with pinyin as key, kanji as value
-    4. Keep the entry with the best (highest) score for each (pinyin, word) pair
+    1. Look up pinyin (phrase-level first, then character-by-character)
+    2. Create new entry with pinyin as key, kanji as value
+    3. Keep the entry with the best (highest) score for each (pinyin, word) pair
     """
     # Track best entry for each (pinyin, word) pair
     best_entries: dict[tuple[str, str], tuple[str, str, int, int, int, float]] = {}
 
     print("Generating pinyin entries from Japanese dictionary...")
+    phrase_hits = 0
+    char_hits = 0
 
     # Process Japanese dictionary entries
     for ruby, word, lcid, rcid, mid, score in japanese_entries:
@@ -333,8 +417,11 @@ def generate_pinyin_entries(
         if not any(is_kanji(c) for c in word):
             continue
 
+        # Check if word exists in phrase dictionary (for stats)
+        is_phrase_hit = word in phrase_to_pinyin
+
         # Generate pinyin for the word
-        pinyin = generate_pinyin_for_word(word, char_to_pinyin)
+        pinyin = generate_pinyin_for_word(word, phrase_to_pinyin, char_to_pinyin)
 
         if pinyin and pinyin.isascii() and pinyin.islower():
             key = (pinyin, word)
@@ -345,13 +432,16 @@ def generate_pinyin_entries(
             if key not in best_entries or adjusted_score > best_entries[key][5]:
                 best_entries[key] = (pinyin, word, lcid, rcid, mid, adjusted_score)
 
+            # Track stats
+            if is_phrase_hit:
+                phrase_hits += 1
+            else:
+                char_hits += 1
+
     pinyin_entries = list(best_entries.values())
     print(f"Generated {len(pinyin_entries)} pinyin entries from Japanese dictionary")
-
-    # NOTE: Unihan-only characters are intentionally NOT added.
-    # This dictionary uses Japanese usage frequency only.
-    # Characters not in the Japanese dictionary are excluded.
-    print("Skipping Unihan-only characters (Japanese-only mode)")
+    print(f"  - Phrase-level pinyin: {phrase_hits} hits")
+    print(f"  - Character-level pinyin: {char_hits} hits")
     print(f"Total pinyin entries: {len(pinyin_entries)}")
 
     return pinyin_entries
@@ -632,12 +722,6 @@ def main():
         help="Source directory containing Japanese dictionary files (.loudstxt3)"
     )
     parser.add_argument(
-        "--unihan", "-u",
-        type=Path,
-        default=None,
-        help="Path to Unihan_Readings.txt (will be downloaded if not specified)"
-    )
-    parser.add_argument(
         "--tsv-only",
         action="store_true",
         help="Only generate TSV file, skip LOUDS building"
@@ -646,25 +730,24 @@ def main():
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
 
-    # Step 1: Load or download Unihan
-    if args.unihan and args.unihan.exists():
-        unihan_file = args.unihan
-    else:
-        unihan_file = download_unihan(args.output.parent)
+    # Step 1: Download phrase-pinyin-data (replaces Unihan for better multi-pronunciation handling)
+    phrase_file, char_file = download_phrase_pinyin_data(args.output.parent)
 
-    char_to_pinyin = load_unihan_mandarin(unihan_file)
+    # Step 2: Load pinyin data
+    phrase_to_pinyin = load_phrase_pinyin(phrase_file)
+    char_to_pinyin = load_char_pinyin(char_file)
 
-    # Step 2: Extract entries from Japanese dictionary
+    # Step 3: Extract entries from Japanese dictionary
     japanese_entries = extract_japanese_dictionary(args.dict_dir)
 
-    # Step 3: Generate pinyin entries
-    pinyin_entries = generate_pinyin_entries(japanese_entries, char_to_pinyin)
+    # Step 4: Generate pinyin entries
+    pinyin_entries = generate_pinyin_entries(japanese_entries, phrase_to_pinyin, char_to_pinyin)
 
-    # Step 4: Write TSV
+    # Step 5: Write TSV
     tsv_file = args.output / "pinyin_dictionary.tsv"
     write_tsv(pinyin_entries, tsv_file)
 
-    # Step 5: Build LOUDS dictionary
+    # Step 6: Build LOUDS dictionary
     if not args.tsv_only:
         char_id_file = args.dict_dir / "charID.chid"
         build_louds_dictionary(tsv_file, args.output, char_id_file=char_id_file)
