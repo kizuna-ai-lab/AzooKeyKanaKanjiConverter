@@ -20,3 +20,8 @@ Package.resolved
 *.gguf
 *.dll
 *.lib
+
+# Pinyin dictionary generation
+Unihan_Readings.txt
+Unihan.zip
+build_pinyin_dict.swift
