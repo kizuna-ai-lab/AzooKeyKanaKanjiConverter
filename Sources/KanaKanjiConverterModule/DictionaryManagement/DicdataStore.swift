@@ -175,16 +175,20 @@ public final class DicdataStore {
         // Pinyin dictionary for hybrid input mode
         if query == "pinyin" {
             if state.pinyinDictionaryHasLoaded {
+                debug("loadLOUDS(pinyin): using cached LOUDS, isNil=\(state.pinyinDictionaryLOUDS == nil)")
                 return state.pinyinDictionaryLOUDS
             }
             // Try pinyin-specific URL first, then fall back to main dictionary
             let pinyinURL = state.pinyinDictionaryURL ?? self.dictionaryURL
+            debug("loadLOUDS(pinyin): pinyinDictionaryURL=\(String(describing: state.pinyinDictionaryURL)), using=\(pinyinURL.path)")
+
             if let louds = LOUDS.load("pinyin", dictionaryURL: pinyinURL) {
                 state.updatePinyinDictionaryLOUDS(louds)
+                debug("loadLOUDS(pinyin): successfully loaded")
                 return louds
             } else {
                 state.updatePinyinDictionaryLOUDS(nil)
-                debug("Error: 拼音辞書のloudsファイルの読み込みに失敗しましたが、このエラーは深刻ではありません。")
+                debug("Error: 拼音辞書のloudsファイルの読み込みに失敗しました。pinyinURL=\(pinyinURL.path)")
                 return nil
             }
         }
@@ -498,11 +502,18 @@ public final class DicdataStore {
         maxLength: Int,
         state: DicdataStoreState
     ) -> [(element: DicdataElement, pinyinLength: Int)] {
-        guard state.enablePinyinLookup else { return [] }
-        guard let louds = self.loadLOUDS(query: "pinyin", state: state) else { return [] }
+        guard state.enablePinyinLookup else {
+            debug("pinyinSearchWithLength: pinyin lookup disabled")
+            return []
+        }
+        guard let louds = self.loadLOUDS(query: "pinyin", state: state) else {
+            debug("pinyinSearchWithLength: failed to load pinyin LOUDS, pinyinDictionaryURL: \(String(describing: state.pinyinDictionaryURL))")
+            return []
+        }
 
         let availableInput = String(romanInput.dropFirst(startIndex).prefix(maxLength)).lowercased()
         guard !availableInput.isEmpty else { return [] }
+        debug("pinyinSearchWithLength: searching '\(availableInput)'")
 
         var results: [(element: DicdataElement, pinyinLength: Int)] = []
 
@@ -514,15 +525,18 @@ public final class DicdataStore {
             // Find exact matches at this length
             if let nodeIndex = louds.searchNodeIndex(chars: charIDs) {
                 let entries = self.getDicdataFromLoudstxt3(identifier: "pinyin", indices: [nodeIndex], state: state)
+                debug("pinyinSearchWithLength: '\(searchString)' -> nodeIndex \(nodeIndex), entries: \(entries.count)")
                 for entry in entries {
                     // Verify the ruby (pinyin) matches the search string exactly
                     if entry.ruby.lowercased() == searchString {
                         results.append((entry, length))
+                        debug("pinyinSearchWithLength: matched '\(searchString)' -> '\(entry.word)'")
                     }
                 }
             }
         }
 
+        debug("pinyinSearchWithLength: total results: \(results.count)")
         return results
     }
 

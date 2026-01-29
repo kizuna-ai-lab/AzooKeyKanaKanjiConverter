@@ -34,7 +34,8 @@ public extension KanaKanjiConverter {
     static func withDefaultDictionary(preloadDictionary: Bool = false) -> Self {
         let converter = Self.init(dicdataStore: .withDefaultDictionary(preloadDictionary: preloadDictionary))
         // Set the pinyin dictionary URL to the separate PinyinDictionary folder
-        converter.setPinyinDictionaryURL(defaultPinyinDictionaryURL())
+        let pinyinURL = defaultPinyinDictionaryURL()
+        converter.setPinyinDictionaryURL(pinyinURL)
         return converter
     }
 }

@@ -158,10 +158,10 @@ public enum DictionaryBuilder {
     ///   Example: "あ" -> "[3042]", "AB" -> "[0041_0042]", "🇯🇵" -> "[D83C_DDEF_D83C_DDF5]"
     ///   - BMP scalars: single 4-hex chunk
     ///   - Non-BMP scalars: surrogate pair (two chunks)
-    /// - Special cases: "user", "memory", and "user_shortcuts" are returned as-is
+    /// - Special cases: "user", "memory", "user_shortcuts", and "pinyin" are returned as-is
     package static func escapedIdentifier(_ inputIdentifier: String) -> String {
         switch inputIdentifier {
-        case "user", "memory", "user_shortcuts":
+        case "user", "memory", "user_shortcuts", "pinyin":
             return inputIdentifier
         default:
             break

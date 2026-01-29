@@ -391,9 +391,15 @@ public struct ComposingText: Sendable {
     /// Returns the original roman characters before kana conversion
     public var rawRomanInput: String {
         input.compactMap { element -> Character? in
-            if case let .character(c) = element.piece { return c }
-            return nil
-        }.map(String.init).joined()
+            switch element.piece {
+            case .character(let c):
+                return c
+            case .key(intention: _, input: let c, modifiers: _):
+                return c
+            case .compositionSeparator:
+                return nil
+            }
+        }.map(String.init).joined().lowercased()
     }
 
     /// Get raw roman input for a specific range (for pinyin lookup)
@@ -405,8 +411,14 @@ public struct ComposingText: Sendable {
         let endIndex = min(startInputIndex + maxLength, input.count)
         guard startInputIndex < endIndex else { return "" }
         return input[startInputIndex..<endIndex].compactMap { element -> Character? in
-            if case let .character(c) = element.piece { return c }
-            return nil
+            switch element.piece {
+            case .character(let c):
+                return c
+            case .key(intention: _, input: let c, modifiers: _):
+                return c
+            case .compositionSeparator:
+                return nil
+            }
         }.map(String.init).joined().lowercased()
     }
 
