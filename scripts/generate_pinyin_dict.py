@@ -320,9 +320,10 @@ def generate_pinyin_entries(
     1. Look up pinyin for each kanji character
     2. Concatenate to form the pinyin reading
     3. Create new entry with pinyin as key, kanji as value
+    4. Keep the entry with the best (highest) score for each (pinyin, word) pair
     """
-    pinyin_entries = []
-    seen = set()  # Track (pinyin, word) pairs to avoid duplicates
+    # Track best entry for each (pinyin, word) pair
+    best_entries: dict[tuple[str, str], tuple[str, str, int, int, int, float]] = {}
 
     print("Generating pinyin entries from Japanese dictionary...")
 
@@ -337,12 +338,14 @@ def generate_pinyin_entries(
 
         if pinyin and pinyin.isascii() and pinyin.islower():
             key = (pinyin, word)
-            if key not in seen:
-                # Adjust score slightly lower than original Japanese entry
-                adjusted_score = min(score, -5.0)
-                pinyin_entries.append((pinyin, word, lcid, rcid, mid, adjusted_score))
-                seen.add(key)
+            # Adjust score (cap at -5.0)
+            adjusted_score = min(score, -5.0)
 
+            # Keep entry with best (highest/least negative) score
+            if key not in best_entries or adjusted_score > best_entries[key][5]:
+                best_entries[key] = (pinyin, word, lcid, rcid, mid, adjusted_score)
+
+    pinyin_entries = list(best_entries.values())
     print(f"Generated {len(pinyin_entries)} pinyin entries from Japanese dictionary")
 
     # NOTE: Unihan-only characters are intentionally NOT added.
