@@ -748,30 +748,44 @@ public final class DicdataStore {
 
         // MARK: Parallel pinyin lookup for hybrid mode
         // When pinyin lookup is enabled, search the pinyin dictionary using raw roman input
+        // Note: We need to map between input array indices (used by LatticeRange) and
+        // roman string positions (used by pinyin lookup) since they can differ when
+        // there are composition separators in the input array.
         if state.enablePinyinLookup, let inputRange {
-            let romanInput = composingText.rawRomanInput
-            let startIndex = inputRange.startIndex
-            let searchLength = min(self.maxlength, romanInput.count - startIndex)
+            let mapping = composingText.buildRomanInputMapping()
+            let startInputIndex = inputRange.startIndex
 
-            if searchLength > 0 {
-                // Search for pinyin matches at various lengths
-                let pinyinResults = self.pinyinSearchWithLength(
-                    romanInput: romanInput,
-                    startIndex: startIndex,
-                    maxLength: searchLength,
-                    state: state
-                )
+            // Convert input array index to roman string position
+            // Only proceed if the index is valid and not at a separator
+            if startInputIndex < mapping.inputToRoman.count {
+                let romanStartPos = mapping.inputToRoman[startInputIndex]
+                if romanStartPos >= 0 {  // Skip if at a separator
+                    let romanInput = mapping.romanString
+                    let searchLength = min(self.maxlength, romanInput.count - romanStartPos)
 
-                for (element, pinyinLength) in pinyinResults {
-                    // Calculate the end index in input space
-                    let endInputIndex = startIndex + pinyinLength - 1
-                    if endInputIndex < composingText.input.count {
-                        let range: Lattice.LatticeRange = .input(from: startIndex, to: endInputIndex + 1)
-                        let node = LatticeNode(data: element, range: range)
-                        if needBOS {
-                            node.prevs.append(RegisteredNode.BOSNode())
+                    if searchLength > 0 {
+                        // Search for pinyin matches at various lengths
+                        let pinyinResults = self.pinyinSearchWithLength(
+                            romanInput: romanInput,
+                            startIndex: romanStartPos,  // Use roman string position
+                            maxLength: searchLength,
+                            state: state
+                        )
+
+                        for (element, pinyinLength) in pinyinResults {
+                            // Convert roman string end position back to input array index
+                            let romanEndPos = romanStartPos + pinyinLength - 1
+                            if romanEndPos < mapping.romanToInput.count {
+                                let endInputIndex = mapping.romanToInput[romanEndPos]
+
+                                let range: Lattice.LatticeRange = .input(from: startInputIndex, to: endInputIndex + 1)
+                                let node = LatticeNode(data: element, range: range)
+                                if needBOS {
+                                    node.prevs.append(RegisteredNode.BOSNode())
+                                }
+                                latticeNodes.append(node)
+                            }
                         }
-                        latticeNodes.append(node)
                     }
                 }
             }

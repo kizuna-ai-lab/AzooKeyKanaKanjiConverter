@@ -422,6 +422,57 @@ public struct ComposingText: Sendable {
         }.map(String.init).joined().lowercased()
     }
 
+    /// Mapping between input array indices and roman string positions
+    /// Used for coordinating pinyin lookup which operates on roman string positions
+    /// with LatticeRange which operates on input array indices
+    public struct RomanInputMapping: Sendable {
+        /// Maps input array index to roman string position (-1 if separator)
+        public let inputToRoman: [Int]
+        /// Maps roman string position to input array index
+        public let romanToInput: [Int]
+        /// The roman string built from the input array
+        public let romanString: String
+
+        public init(inputToRoman: [Int], romanToInput: [Int], romanString: String) {
+            self.inputToRoman = inputToRoman
+            self.romanToInput = romanToInput
+            self.romanString = romanString
+        }
+    }
+
+    /// Build a bidirectional mapping between input array indices and roman string positions
+    /// This is needed because:
+    /// - LatticeRange uses input array indices
+    /// - Pinyin lookup uses roman string positions
+    /// - The two coordinate systems don't map 1:1 when there are composition separators
+    public func buildRomanInputMapping() -> RomanInputMapping {
+        var inputToRoman: [Int] = []
+        var romanToInput: [Int] = []
+        var romanChars: [Character] = []
+
+        for (inputIdx, element) in input.enumerated() {
+            switch element.piece {
+            case .character(let c):
+                inputToRoman.append(romanChars.count)
+                romanToInput.append(inputIdx)
+                romanChars.append(Character(c.lowercased()))
+            case .key(intention: _, input: let c, modifiers: _):
+                inputToRoman.append(romanChars.count)
+                romanToInput.append(inputIdx)
+                romanChars.append(Character(c.lowercased()))
+            case .compositionSeparator:
+                // Separators don't contribute to roman string
+                inputToRoman.append(-1)
+            }
+        }
+
+        return RomanInputMapping(
+            inputToRoman: inputToRoman,
+            romanToInput: romanToInput,
+            romanString: String(romanChars)
+        )
+    }
+
     public mutating func stopComposition() {
         self.input = []
         self.convertTarget = ""
