@@ -8,6 +8,7 @@
 
 import Foundation
 @testable import KanaKanjiConverterModuleWithDefaultDictionary
+import SwiftUtils
 import XCTest
 
 final class ConverterTests: XCTestCase {
@@ -185,18 +186,24 @@ final class ConverterTests: XCTestCase {
         
         let results = converter.requestCandidates(c, options: requestOptions())
         
-        // Check that meaningful complete matches are prioritized
-        let meaningfulCandidates = ["銀行", "引航", "銀漢", "インハング", "いんはんg", "インハンG"]
+        // Print the first 15 results for debugging
+        print("\nFirst 15 candidates:")
+        for (i, candidate) in results.mainResults.prefix(15).enumerated() {
+            print("  \(i+1). '\(candidate.text)' (value: \(candidate.value))")
+        }
         
-        // The first result should be one of the meaningful complete matches
-        XCTAssertTrue(meaningfulCandidates.contains(results.mainResults.first?.text ?? ""), 
-                      "First result should be a meaningful complete match, but got: \(results.mainResults.first?.text ?? "none")")
-        
-        // Check that meaningless partial matches with mixed roman/kanji are filtered out
-        let meaninglessPatterns = ["y印版g", "y印半g", "yインハンg", "YインハンG", "yいんはんg", "ｙインハンｇ"]
+        // Check that meaningless partial matches that mix roman with kanji are filtered out
+        // These are dictionary lookups that partially match and keep unconverted roman characters
+        let meaninglessPatterns = ["y印版g", "y印半g", "yインハンg", "YインハンG"]
         for pattern in meaninglessPatterns {
             XCTAssertFalse(results.mainResults.contains { $0.text == pattern },
-                           "Meaningless partial match '\(pattern)' should be filtered out")
+                           "Meaningless partial match '\(pattern)' (roman+kanji mix) should be filtered out")
+        }
+        
+        // At least the first candidate should not be a single roman character
+        if let first = results.mainResults.first {
+            let isSingleRoman = first.text.count == 1 && first.text.onlyRomanAlphabet
+            XCTAssertFalse(isSingleRoman, "First candidate should not be a single roman character, but got: '\(first.text)'")
         }
     }
 

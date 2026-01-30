@@ -436,6 +436,21 @@ public final class KanaKanjiConverter {
         var candidates: [Candidate] = []
         let string = inputData.convertTarget.toKatakana()
         let composingCount: ComposingCount = .inputCount(inputData.input.count)
+        
+        // Check if the string has mixed roman and non-roman characters
+        // If so, skip generating meaningless conversion candidates
+        let hasRoman = string.containsRomanAlphabet
+        let hasNonRoman = string.contains(where: { char in
+            let str = String(char)
+            return !str.onlyRomanAlphabet && !str.isEmpty
+        })
+        
+        // Skip generating additional candidates if we have mixed roman/non-roman
+        // (e.g., "yインハンg" from input "yinhang" where y and g remain unconverted)
+        if hasRoman && hasNonRoman {
+            return []
+        }
+        
         do {
             // カタカナ
             let value = -14 * getKatakanaScore(string)
@@ -533,32 +548,8 @@ public final class KanaKanjiConverter {
             let clauseResultCandidates = clauseResult.map { self.converter.processClauseCandidate($0) }
             bestCandidateDataForPrediction = zip(clauseResult, clauseResultCandidates).max {$0.1.value < $1.1.value}!.0
             wholeSentenceUniqueCandidates = self.getUniqueCandidate(clauseResultCandidates)
-                .filter { candidate in
-                    // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
-                    let text = candidate.text
-                    let hasRoman = text.containsRomanAlphabet
-                    let hasNonRoman = text.contains(where: { char in
-                        let str = String(char)
-                        return !str.onlyRomanAlphabet && !str.isEmpty
-                    })
-                    // If a candidate has both roman and non-roman characters mixed together,
-                    // it's likely a meaningless partial match - filter it out
-                    return !(hasRoman && hasNonRoman)
-                }
         } else {
             wholeSentenceUniqueCandidates = self.getUniqueCandidate(clauseResult.lazy.map { self.converter.processClauseCandidate($0) })
-                .filter { candidate in
-                    // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
-                    let text = candidate.text
-                    let hasRoman = text.containsRomanAlphabet
-                    let hasNonRoman = text.contains(where: { char in
-                        let str = String(char)
-                        return !str.onlyRomanAlphabet && !str.isEmpty
-                    })
-                    // If a candidate has both roman and non-roman characters mixed together,
-                    // it's likely a meaningless partial match - filter it out
-                    return !(hasRoman && hasNonRoman)
-                }
         }
         // ユーザショートカット（全文一致のみ）候補を抽出
         let userShortcutsCandidates: [Candidate] = {
@@ -603,7 +594,31 @@ public final class KanaKanjiConverter {
             }
             bestFiveSentenceCandidates = first5
         } else {
-            bestFiveSentenceCandidates = wholeSentenceUniqueCandidates.min(count: 5, sortedBy: {$0.value > $1.value})
+            // Sort candidates, prioritizing pure kanji/kana over mixed roman+kanji
+            bestFiveSentenceCandidates = wholeSentenceUniqueCandidates.min(count: 5, sortedBy: { lhs, rhs in
+                // Check if candidates have mixed roman/non-roman characters
+                let lhsHasRoman = lhs.text.containsRomanAlphabet
+                let lhsHasNonRoman = lhs.text.contains(where: { char in
+                    let str = String(char)
+                    return !str.onlyRomanAlphabet && !str.isEmpty
+                })
+                let lhsMixed = lhsHasRoman && lhsHasNonRoman
+                
+                let rhsHasRoman = rhs.text.containsRomanAlphabet
+                let rhsHasNonRoman = rhs.text.contains(where: { char in
+                    let str = String(char)
+                    return !str.onlyRomanAlphabet && !str.isEmpty
+                })
+                let rhsMixed = rhsHasRoman && rhsHasNonRoman
+                
+                // If only one is mixed, prioritize the pure one
+                if lhsMixed != rhsMixed {
+                    return !lhsMixed  // lhs is better if it's NOT mixed
+                }
+                
+                // Otherwise, sort by value
+                return lhs.value > rhs.value
+            })
         }
 
         var predictionResults: [Candidate] = []
@@ -669,9 +684,16 @@ public final class KanaKanjiConverter {
                 let str = String(char)
                 return !str.onlyRomanAlphabet && !str.isEmpty
             })
-            // If a candidate has both roman and non-roman characters mixed together,
-            // it's likely a meaningless partial match - filter it out
-            return !(hasRoman && hasNonRoman)
+            // Filter out if:
+            // 1. Has both roman and non-roman characters mixed together (e.g., "y印版g")
+            // 2. Is a single roman character (these are not meaningful conversions)
+            if hasRoman && hasNonRoman {
+                return false
+            }
+            if text.count == 1 && hasRoman {
+                return false
+            }
+            return true
         }
 
         var firstClauseResults = uniqueFirstClauseCandidates.min(count: 5) {
@@ -717,9 +739,16 @@ public final class KanaKanjiConverter {
                         let str = String(char)
                         return !str.onlyRomanAlphabet && !str.isEmpty
                     })
-                    // If a candidate has both roman and non-roman characters mixed together,
-                    // it's likely a meaningless partial match - filter it out
-                    return !(hasRoman && hasNonRoman)
+                    // Filter out if:
+                    // 1. Has both roman and non-roman characters mixed together (e.g., "y印版g")
+                    // 2. Is a single roman character (these are not meaningful conversions)
+                    if hasRoman && hasNonRoman {
+                        return false
+                    }
+                    if text.count == 1 && hasRoman {
+                        return false
+                    }
+                    return true
                 }
             // その他辞書データに追加する候補
             let additionalCandidates: [Candidate] = self.getAdditionalCandidate(inputData, options: options)
