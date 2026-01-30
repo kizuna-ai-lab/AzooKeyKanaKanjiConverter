@@ -533,8 +533,32 @@ public final class KanaKanjiConverter {
             let clauseResultCandidates = clauseResult.map { self.converter.processClauseCandidate($0) }
             bestCandidateDataForPrediction = zip(clauseResult, clauseResultCandidates).max {$0.1.value < $1.1.value}!.0
             wholeSentenceUniqueCandidates = self.getUniqueCandidate(clauseResultCandidates)
+                .filter { candidate in
+                    // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
+                    let text = candidate.text
+                    let hasRoman = text.containsRomanAlphabet
+                    let hasNonRoman = text.contains(where: { char in
+                        let str = String(char)
+                        return !str.onlyRomanAlphabet && !str.isEmpty
+                    })
+                    // If a candidate has both roman and non-roman characters mixed together,
+                    // it's likely a meaningless partial match - filter it out
+                    return !(hasRoman && hasNonRoman)
+                }
         } else {
             wholeSentenceUniqueCandidates = self.getUniqueCandidate(clauseResult.lazy.map { self.converter.processClauseCandidate($0) })
+                .filter { candidate in
+                    // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
+                    let text = candidate.text
+                    let hasRoman = text.containsRomanAlphabet
+                    let hasNonRoman = text.contains(where: { char in
+                        let str = String(char)
+                        return !str.onlyRomanAlphabet && !str.isEmpty
+                    })
+                    // If a candidate has both roman and non-roman characters mixed together,
+                    // it's likely a meaningless partial match - filter it out
+                    return !(hasRoman && hasNonRoman)
+                }
         }
         // ユーザショートカット（全文一致のみ）候補を抽出
         let userShortcutsCandidates: [Candidate] = {
@@ -637,6 +661,18 @@ public final class KanaKanjiConverter {
                 data: Array(candidateData.data[0...count])
             )
         })
+        .filter { candidate in
+            // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
+            let text = candidate.text
+            let hasRoman = text.containsRomanAlphabet
+            let hasNonRoman = text.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+            // If a candidate has both roman and non-roman characters mixed together,
+            // it's likely a meaningless partial match - filter it out
+            return !(hasRoman && hasNonRoman)
+        }
 
         var firstClauseResults = uniqueFirstClauseCandidates.min(count: 5) {
             if $0.rubyCount == $1.rubyCount {
@@ -671,6 +707,19 @@ public final class KanaKanjiConverter {
                         lastMid: $0.data.mid,
                         data: [$0.data]
                     )
+                }
+                .filter { candidate in
+                    // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
+                    // Examples to filter: "y印版g", "yインハンg", "yいんはんg"
+                    let text = candidate.text
+                    let hasRoman = text.containsRomanAlphabet
+                    let hasNonRoman = text.contains(where: { char in
+                        let str = String(char)
+                        return !str.onlyRomanAlphabet && !str.isEmpty
+                    })
+                    // If a candidate has both roman and non-roman characters mixed together,
+                    // it's likely a meaningless partial match - filter it out
+                    return !(hasRoman && hasNonRoman)
                 }
             // その他辞書データに追加する候補
             let additionalCandidates: [Candidate] = self.getAdditionalCandidate(inputData, options: options)

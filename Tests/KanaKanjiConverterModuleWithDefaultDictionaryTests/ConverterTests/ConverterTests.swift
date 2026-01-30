@@ -177,6 +177,29 @@ final class ConverterTests: XCTestCase {
         XCTAssertTrue(results.mainResults.contains { $0.text == "黄" })
     }
 
+    // Test for filtering meaningless partial matches with mixed roman/kanji
+    func testYinhangConversion() async throws {
+        let converter = KanaKanjiConverter.withDefaultDictionary()
+        var c = ComposingText()
+        c.insertAtCursorPosition("yinhang", inputStyle: .roman2kana)
+        
+        let results = converter.requestCandidates(c, options: requestOptions())
+        
+        // Check that meaningful complete matches are prioritized
+        let meaningfulCandidates = ["銀行", "引航", "銀漢", "インハング", "いんはんg", "インハンG"]
+        
+        // The first result should be one of the meaningful complete matches
+        XCTAssertTrue(meaningfulCandidates.contains(results.mainResults.first?.text ?? ""), 
+                      "First result should be a meaningful complete match, but got: \(results.mainResults.first?.text ?? "none")")
+        
+        // Check that meaningless partial matches with mixed roman/kanji are filtered out
+        let meaninglessPatterns = ["y印版g", "y印半g", "yインハンg", "YインハンG", "yいんはんg", "ｙインハンｇ"]
+        for pattern in meaninglessPatterns {
+            XCTAssertFalse(results.mainResults.contains { $0.text == pattern },
+                           "Meaningless partial match '\(pattern)' should be filtered out")
+        }
+    }
+
     // memo: このケースでfatalErrorが発生する不具合が生じることがあった
     func testIttaAndThenDelete() async throws {
         let converter = KanaKanjiConverter.withDefaultDictionary()
