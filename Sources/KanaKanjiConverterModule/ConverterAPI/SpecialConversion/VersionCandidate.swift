@@ -12,7 +12,7 @@ import SwiftUtils
 extension KanaKanjiConverter {
     /// Converter のビルド識別子。コードを変更するたびにこの値を更新してください。
     /// Update this value whenever you modify the converter code to verify which version is running.
-    public static let converterBuildIdentifier = "2026-02-01-mixed-filter-fix"
+    public static let converterBuildIdentifier = "2026-02-01-185121-b0bce5e"
 
     /// バージョン情報を表示する関数。
     /// Trigger word: "xldbg" (uncommon, used for debugging)

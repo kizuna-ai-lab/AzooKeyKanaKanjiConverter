@@ -9,10 +9,12 @@
 import Algorithms
 import EfficientNGram
 public import Foundation
+import os.log
 import SwiftUtils
 
 /// かな漢字変換の管理を受け持つクラス
 public final class KanaKanjiConverter {
+    private let converterLogger = Logger(subsystem: "com.xiaoli.ime", category: "converter")
     private let converter: Kana2Kanji
 
     public init(dicdataStore: DicdataStore) {
@@ -536,7 +538,14 @@ public final class KanaKanjiConverter {
         // 比較的大きい配列（〜1000、2000程度の候補が含まれることがある）
         let clauseResult = result.result.getCandidateData()
         if clauseResult.isEmpty {
+            converterLogger.error("🔍 Early return path triggered! clauseResult is empty")
             let candidates = self.getUniqueCandidate(self.getAdditionalCandidate(inputData, options: options))
+            converterLogger.error("🔍 Early return candidates count: \(candidates.count)")
+            for (i, c) in candidates.prefix(5).enumerated() {
+                let hasRoman = c.text.contains(where: { $0.isASCII && $0.isLetter })
+                let hasNonRoman = c.text.contains(where: { !$0.isASCII })
+                converterLogger.error("  earlyReturn[\(i)]: '\(c.text, privacy: .public)' roman=\(hasRoman) nonRoman=\(hasNonRoman)")
+            }
             return ConversionResult(mainResults: candidates, predictionResults: [], englishPredictionResults: [], firstClauseResults: candidates)   // アーリーリターン
         }
 
@@ -592,6 +601,12 @@ public final class KanaKanjiConverter {
             return hasRoman && hasNonRoman
         }
 
+        // Debug: log wholeSentenceUniqueCandidates
+        converterLogger.error("🔍 wholeSentenceUniqueCandidates count: \(wholeSentenceUniqueCandidates.count)")
+        for (i, c) in wholeSentenceUniqueCandidates.prefix(5).enumerated() {
+            converterLogger.error("  wholeSentence[\(i)]: '\(c.text, privacy: .public)' mixed=\(isMixedCandidate(c))")
+        }
+
         // モデル重みを統合
         let bestFiveSentenceCandidates: [Candidate]
         if options.zenzaiMode.enabled {
@@ -630,6 +645,12 @@ public final class KanaKanjiConverter {
             })
         }
 
+        // Debug: log bestFiveSentenceCandidates
+        converterLogger.error("🔍 bestFiveSentenceCandidates count: \(bestFiveSentenceCandidates.count)")
+        for (i, c) in bestFiveSentenceCandidates.enumerated() {
+            converterLogger.error("  bestFive[\(i)]: '\(c.text, privacy: .public)' mixed=\(isMixedCandidate(c))")
+        }
+
         var predictionResults: [Candidate] = []
         var englishPredictionResults: [Candidate] = []
         let fullCandidates: [Candidate]
@@ -665,16 +686,33 @@ public final class KanaKanjiConverter {
             // その他のトップレベル変換（先頭に表示されうる変換候補）
             let topLevelAdditionalCandidates = self.getTopLevelAdditionalCandidate(inputData, options: options)
             // best8、foreign_candidates、zeroHintPrediction_candidates、toplevel_additional_candidate、user_shortcuts を混ぜて上位5件を取得する
-            fullCandidates = getUniqueCandidate(
+            let rawFullCandidates = getUniqueCandidate(
                 bestFiveSentenceCandidates
                     .chained(consume bestThreePredictionCandidates)
                     .chained(consume foreignCandidates)
                     .chained(consume topLevelAdditionalCandidates)
                     .chained(consume userShortcutsCandidates)
             ).min(count: 5, sortedBy: {$0.value > $1.value})
+
+            // Filter out mixed roman/kanji candidates from fullCandidates
+            // This ensures "y印版g" type candidates don't appear at the top
+            fullCandidates = rawFullCandidates.filter { candidate in
+                let text = candidate.text
+                let hasRoman = text.containsRomanAlphabet
+                let hasNonRoman = text.contains(where: { char in
+                    let str = String(char)
+                    return !str.onlyRomanAlphabet && !str.isEmpty
+                })
+                // Filter out if has both roman and non-roman characters mixed together
+                if hasRoman && hasNonRoman {
+                    return false
+                }
+                return true
+            }
         }
         // 文節のみ変換するパターン（上位5件）
-        let uniqueFirstClauseCandidates = self.getUniqueCandidate((consume clauseResult).lazy.map {(candidateData: CandidateData) -> Candidate in
+        // First, collect all candidates before filtering for debugging
+        let allFirstClauseCandidates = self.getUniqueCandidate((consume clauseResult).lazy.map {(candidateData: CandidateData) -> Candidate in
             let first = candidateData.clauses.first!
             let count = max(0, first.clause.dataEndIndex)
             return Candidate(
@@ -685,7 +723,19 @@ public final class KanaKanjiConverter {
                 data: Array(candidateData.data[0...count])
             )
         })
-        .filter { candidate in
+
+        // Debug: log before filtering
+        converterLogger.error("🔍 firstClause BEFORE filter: \(allFirstClauseCandidates.count)")
+        for (i, c) in allFirstClauseCandidates.prefix(10).enumerated() {
+            let hasRoman = c.text.containsRomanAlphabet
+            let hasNonRoman = c.text.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+            converterLogger.error("  beforeFilter[\(i)]: '\(c.text, privacy: .public)' roman=\(hasRoman) nonRoman=\(hasNonRoman)")
+        }
+
+        let uniqueFirstClauseCandidates = allFirstClauseCandidates.filter { candidate in
             // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
             let text = candidate.text
             let hasRoman = text.containsRomanAlphabet
@@ -711,6 +761,12 @@ public final class KanaKanjiConverter {
             } else {
                 $0.rubyCount > $1.rubyCount
             }
+        }
+        converterLogger.error("🔍 firstClauseResults after filter: \(firstClauseResults.count)")
+        for (i, c) in firstClauseResults.enumerated() {
+            let hasRoman = c.text.contains(where: { $0.isASCII && $0.isLetter })
+            let hasNonRoman = c.text.contains(where: { !$0.isASCII })
+            converterLogger.error("  firstClause[\(i)]: '\(c.text, privacy: .public)' roman=\(hasRoman) nonRoman=\(hasNonRoman)")
         }
         // 重複のない変換候補を作成するための集合
         var seenCandidate: Set<String> = fullCandidates.mapSet {$0.text}
@@ -787,13 +843,29 @@ public final class KanaKanjiConverter {
                 result.insert(candidate, at: min(result.endIndex, 2))
             } else if let candidate = bestFiveSentenceCandidates.first(where: checkRuby) {
                 result.insert(candidate, at: min(result.endIndex, 2))
-            } else if let candidate = wholeSentenceUniqueCandidates.first(where: checkRuby) {
+            } else if let candidate = wholeSentenceUniqueCandidates.first(where: { checkRuby($0) && !isMixedCandidate($0) }) {
                 result.insert(candidate, at: min(result.endIndex, 2))
             }
         }
 
         result.append(contentsOf: consume firstClauseCandidates)
         result.append(contentsOf: consume wordCandidates)
+
+        // Final filter: remove all mixed roman/kanji candidates from result
+        // This ensures "y印版g" type candidates never appear in the final results
+        result = result.filter { candidate in
+            let text = candidate.text
+            let hasRoman = text.containsRomanAlphabet
+            let hasNonRoman = text.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+            // Filter out if has both roman and non-roman characters mixed together
+            if hasRoman && hasNonRoman {
+                return false
+            }
+            return true
+        }
 
         result.mutatingForEach { item in
             item.withActions(self.getAppropriateActions(item))
@@ -811,6 +883,13 @@ public final class KanaKanjiConverter {
             item.withActions(self.getAppropriateActions(item))
             item.parseTemplate()
         }
+
+        // Debug: log final mainResults before returning
+        converterLogger.error("🔍 FINAL mainResults count: \(result.count)")
+        for (i, c) in result.prefix(5).enumerated() {
+            converterLogger.error("  FINAL[\(i)]: '\(c.text, privacy: .public)' mixed=\(isMixedCandidate(c))")
+        }
+
         return ConversionResult(mainResults: result, predictionResults: predictionResults, englishPredictionResults: englishPredictionResults, firstClauseResults: firstClauseResults)
     }
 
