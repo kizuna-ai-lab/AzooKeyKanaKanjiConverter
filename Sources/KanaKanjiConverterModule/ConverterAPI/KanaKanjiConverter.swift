@@ -9,12 +9,10 @@
 import Algorithms
 import EfficientNGram
 public import Foundation
-import os.log
 import SwiftUtils
 
 /// かな漢字変換の管理を受け持つクラス
 public final class KanaKanjiConverter {
-    private let converterLogger = Logger(subsystem: "com.xiaoli.ime", category: "converter")
     private let converter: Kana2Kanji
 
     public init(dicdataStore: DicdataStore) {
@@ -439,17 +437,38 @@ public final class KanaKanjiConverter {
         let string = inputData.convertTarget.toKatakana()
         let composingCount: ComposingCount = .inputCount(inputData.input.count)
         
-        // Check if the string has mixed roman and non-roman characters
-        // If so, skip generating meaningless conversion candidates
-        let hasRoman = string.containsRomanAlphabet
-        let hasNonRoman = string.contains(where: { char in
-            let str = String(char)
-            return !str.onlyRomanAlphabet && !str.isEmpty
-        })
-        
-        // Skip generating additional candidates if we have mixed roman/non-roman
+        // Check if the string has INTERLEAVED roman and non-roman characters
+        // Skip generating meaningless conversion candidates for interleaved mixing
         // (e.g., "yインハンg" from input "yinhang" where y and g remain unconverted)
-        if hasRoman && hasNonRoman {
+        // But allow trailing unconverted roman (e.g., "私のxiansheng")
+        let isInterleaved: Bool = {
+            let hasRoman = string.containsRomanAlphabet
+            let hasNonRoman = string.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+
+            // If not mixed at all, not interleaved
+            if !hasRoman || !hasNonRoman {
+                return false
+            }
+
+            // Find the last non-roman character index
+            guard let lastNonRomanIndex = string.lastIndex(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            }) else {
+                return false
+            }
+
+            // Check if there's any roman character BEFORE the last non-roman character
+            let prefixBeforeLastNonRoman = string[..<lastNonRomanIndex]
+            return prefixBeforeLastNonRoman.contains(where: { char in
+                String(char).onlyRomanAlphabet
+            })
+        }()
+
+        if isInterleaved {
             return []
         }
         
@@ -538,14 +557,7 @@ public final class KanaKanjiConverter {
         // 比較的大きい配列（〜1000、2000程度の候補が含まれることがある）
         let clauseResult = result.result.getCandidateData()
         if clauseResult.isEmpty {
-            converterLogger.error("🔍 Early return path triggered! clauseResult is empty")
             let candidates = self.getUniqueCandidate(self.getAdditionalCandidate(inputData, options: options))
-            converterLogger.error("🔍 Early return candidates count: \(candidates.count)")
-            for (i, c) in candidates.prefix(5).enumerated() {
-                let hasRoman = c.text.contains(where: { $0.isASCII && $0.isLetter })
-                let hasNonRoman = c.text.contains(where: { !$0.isASCII })
-                converterLogger.error("  earlyReturn[\(i)]: '\(c.text, privacy: .public)' roman=\(hasRoman) nonRoman=\(hasNonRoman)")
-            }
             return ConversionResult(mainResults: candidates, predictionResults: [], englishPredictionResults: [], firstClauseResults: candidates)   // アーリーリターン
         }
 
@@ -590,21 +602,41 @@ public final class KanaKanjiConverter {
                 return ConversionResult(mainResults: (consume merged).sorted(by: {$0.value > $1.value}), predictionResults: [], englishPredictionResults: [], firstClauseResults: [])
             }
         }
-        // Helper function to check if a candidate has mixed roman/non-roman characters
-        let isMixedCandidate: (Candidate) -> Bool = { candidate in
-            let text = candidate.text
+
+        // Helper function to check if roman and non-roman characters are INTERLEAVED
+        // Returns true for "y印版g" (should filter - roman scattered in Japanese)
+        // Returns false for "私のxiansheng" (should keep - roman only at the end)
+        let isInterleavedMixed: (String) -> Bool = { text in
             let hasRoman = text.containsRomanAlphabet
             let hasNonRoman = text.contains(where: { char in
                 let str = String(char)
                 return !str.onlyRomanAlphabet && !str.isEmpty
             })
-            return hasRoman && hasNonRoman
+
+            // If not mixed at all, not interleaved
+            if !hasRoman || !hasNonRoman {
+                return false
+            }
+
+            // Find the last non-roman character index
+            guard let lastNonRomanIndex = text.lastIndex(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            }) else {
+                return false
+            }
+
+            // Check if there's any roman character BEFORE the last non-roman character
+            // If so, it's interleaved (e.g., "y印版g" has "y" before "版")
+            let prefixBeforeLastNonRoman = text[..<lastNonRomanIndex]
+            return prefixBeforeLastNonRoman.contains(where: { char in
+                String(char).onlyRomanAlphabet
+            })
         }
 
-        // Debug: log wholeSentenceUniqueCandidates
-        converterLogger.error("🔍 wholeSentenceUniqueCandidates count: \(wholeSentenceUniqueCandidates.count)")
-        for (i, c) in wholeSentenceUniqueCandidates.prefix(5).enumerated() {
-            converterLogger.error("  wholeSentence[\(i)]: '\(c.text, privacy: .public)' mixed=\(isMixedCandidate(c))")
+        // Helper function to check if a candidate has interleaved mixed characters
+        let isMixedCandidate: (Candidate) -> Bool = { candidate in
+            isInterleavedMixed(candidate.text)
         }
 
         // モデル重みを統合
@@ -643,12 +675,6 @@ public final class KanaKanjiConverter {
                 // Otherwise, sort by value
                 return lhs.value > rhs.value
             })
-        }
-
-        // Debug: log bestFiveSentenceCandidates
-        converterLogger.error("🔍 bestFiveSentenceCandidates count: \(bestFiveSentenceCandidates.count)")
-        for (i, c) in bestFiveSentenceCandidates.enumerated() {
-            converterLogger.error("  bestFive[\(i)]: '\(c.text, privacy: .public)' mixed=\(isMixedCandidate(c))")
         }
 
         var predictionResults: [Candidate] = []
@@ -694,20 +720,11 @@ public final class KanaKanjiConverter {
                     .chained(consume userShortcutsCandidates)
             ).min(count: 5, sortedBy: {$0.value > $1.value})
 
-            // Filter out mixed roman/kanji candidates from fullCandidates
+            // Filter out INTERLEAVED mixed roman/kanji candidates from fullCandidates
             // This ensures "y印版g" type candidates don't appear at the top
+            // But allows "私のxiansheng" (trailing unconverted roman) to pass through
             fullCandidates = rawFullCandidates.filter { candidate in
-                let text = candidate.text
-                let hasRoman = text.containsRomanAlphabet
-                let hasNonRoman = text.contains(where: { char in
-                    let str = String(char)
-                    return !str.onlyRomanAlphabet && !str.isEmpty
-                })
-                // Filter out if has both roman and non-roman characters mixed together
-                if hasRoman && hasNonRoman {
-                    return false
-                }
-                return true
+                !isInterleavedMixed(candidate.text)
             }
         }
         // 文節のみ変換するパターン（上位5件）
@@ -724,32 +741,15 @@ public final class KanaKanjiConverter {
             )
         })
 
-        // Debug: log before filtering
-        converterLogger.error("🔍 firstClause BEFORE filter: \(allFirstClauseCandidates.count)")
-        for (i, c) in allFirstClauseCandidates.prefix(10).enumerated() {
-            let hasRoman = c.text.containsRomanAlphabet
-            let hasNonRoman = c.text.contains(where: { char in
-                let str = String(char)
-                return !str.onlyRomanAlphabet && !str.isEmpty
-            })
-            converterLogger.error("  beforeFilter[\(i)]: '\(c.text, privacy: .public)' roman=\(hasRoman) nonRoman=\(hasNonRoman)")
-        }
-
         let uniqueFirstClauseCandidates = allFirstClauseCandidates.filter { candidate in
-            // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
+            // Filter out INTERLEAVED mixed roman/kanji candidates (e.g., "y印版g")
+            // But allow trailing unconverted roman (e.g., "私のxiansheng")
             let text = candidate.text
-            let hasRoman = text.containsRomanAlphabet
-            let hasNonRoman = text.contains(where: { char in
-                let str = String(char)
-                return !str.onlyRomanAlphabet && !str.isEmpty
-            })
-            // Filter out if:
-            // 1. Has both roman and non-roman characters mixed together (e.g., "y印版g")
-            // 2. Is a single roman character (these are not meaningful conversions)
-            if hasRoman && hasNonRoman {
+            if isInterleavedMixed(text) {
                 return false
             }
-            if text.count == 1 && hasRoman {
+            // Also filter single roman characters (not meaningful conversions)
+            if text.count == 1 && text.containsRomanAlphabet {
                 return false
             }
             return true
@@ -761,12 +761,6 @@ public final class KanaKanjiConverter {
             } else {
                 $0.rubyCount > $1.rubyCount
             }
-        }
-        converterLogger.error("🔍 firstClauseResults after filter: \(firstClauseResults.count)")
-        for (i, c) in firstClauseResults.enumerated() {
-            let hasRoman = c.text.contains(where: { $0.isASCII && $0.isLetter })
-            let hasNonRoman = c.text.contains(where: { !$0.isASCII })
-            converterLogger.error("  firstClause[\(i)]: '\(c.text, privacy: .public)' roman=\(hasRoman) nonRoman=\(hasNonRoman)")
         }
         // 重複のない変換候補を作成するための集合
         var seenCandidate: Set<String> = fullCandidates.mapSet {$0.text}
@@ -796,21 +790,14 @@ public final class KanaKanjiConverter {
                     )
                 }
                 .filter { candidate in
-                    // Filter out meaningless partial matches that mix unconverted roman letters with kanji/kana
-                    // Examples to filter: "y印版g", "yインハンg", "yいんはんg"
+                    // Filter out INTERLEAVED mixed roman/kanji candidates (e.g., "y印版g")
+                    // But allow trailing unconverted roman (e.g., "私のxiansheng")
                     let text = candidate.text
-                    let hasRoman = text.containsRomanAlphabet
-                    let hasNonRoman = text.contains(where: { char in
-                        let str = String(char)
-                        return !str.onlyRomanAlphabet && !str.isEmpty
-                    })
-                    // Filter out if:
-                    // 1. Has both roman and non-roman characters mixed together (e.g., "y印版g")
-                    // 2. Is a single roman character (these are not meaningful conversions)
-                    if hasRoman && hasNonRoman {
+                    if isInterleavedMixed(text) {
                         return false
                     }
-                    if text.count == 1 && hasRoman {
+                    // Also filter single roman characters (not meaningful conversions)
+                    if text.count == 1 && text.containsRomanAlphabet {
                         return false
                     }
                     return true
@@ -851,20 +838,11 @@ public final class KanaKanjiConverter {
         result.append(contentsOf: consume firstClauseCandidates)
         result.append(contentsOf: consume wordCandidates)
 
-        // Final filter: remove all mixed roman/kanji candidates from result
+        // Final filter: remove INTERLEAVED mixed roman/kanji candidates from result
         // This ensures "y印版g" type candidates never appear in the final results
+        // But allows "私のxiansheng" (trailing unconverted roman) to pass through
         result = result.filter { candidate in
-            let text = candidate.text
-            let hasRoman = text.containsRomanAlphabet
-            let hasNonRoman = text.contains(where: { char in
-                let str = String(char)
-                return !str.onlyRomanAlphabet && !str.isEmpty
-            })
-            // Filter out if has both roman and non-roman characters mixed together
-            if hasRoman && hasNonRoman {
-                return false
-            }
-            return true
+            !isInterleavedMixed(candidate.text)
         }
 
         result.mutatingForEach { item in
@@ -882,12 +860,6 @@ public final class KanaKanjiConverter {
         englishPredictionResults.mutatingForEach { item in
             item.withActions(self.getAppropriateActions(item))
             item.parseTemplate()
-        }
-
-        // Debug: log final mainResults before returning
-        converterLogger.error("🔍 FINAL mainResults count: \(result.count)")
-        for (i, c) in result.prefix(5).enumerated() {
-            converterLogger.error("  FINAL[\(i)]: '\(c.text, privacy: .public)' mixed=\(isMixedCandidate(c))")
         }
 
         return ConversionResult(mainResults: result, predictionResults: predictionResults, englishPredictionResults: englishPredictionResults, firstClauseResults: firstClauseResults)
