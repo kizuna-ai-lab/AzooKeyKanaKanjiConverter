@@ -581,13 +581,34 @@ public final class KanaKanjiConverter {
                 return ConversionResult(mainResults: (consume merged).sorted(by: {$0.value > $1.value}), predictionResults: [], englishPredictionResults: [], firstClauseResults: [])
             }
         }
+        // Helper function to check if a candidate has mixed roman/non-roman characters
+        let isMixedCandidate: (Candidate) -> Bool = { candidate in
+            let text = candidate.text
+            let hasRoman = text.containsRomanAlphabet
+            let hasNonRoman = text.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+            return hasRoman && hasNonRoman
+        }
+
         // モデル重みを統合
         let bestFiveSentenceCandidates: [Candidate]
         if options.zenzaiMode.enabled {
             // FIXME: もう少し良い方法はありそうだけど、短期的にかなりハックな実装にした
             // candidateのvalueをZenzaiの出力順に書き換えることで、このあとのrerank処理で騙されてくれるようになっている
             // より根本的には、`Candidate`にAI評価値をもたせるなどの方法が必要そう
-            var first5 = Array(wholeSentenceUniqueCandidates.prefix(5))
+
+            // Filter out mixed roman/kanji candidates first, then take top 5
+            // If not enough pure candidates, fill with mixed ones (preserving original order)
+            let pureCandidates = wholeSentenceUniqueCandidates.filter { !isMixedCandidate($0) }
+            let mixedCandidates = wholeSentenceUniqueCandidates.filter { isMixedCandidate($0) }
+
+            var first5 = Array(pureCandidates.prefix(5))
+            if first5.count < 5 {
+                first5.append(contentsOf: mixedCandidates.prefix(5 - first5.count))
+            }
+
             let values = first5.map(\.value).sorted(by: >)
             for (i, v) in zip(first5.indices, values) {
                 first5[i].value = v
@@ -596,26 +617,14 @@ public final class KanaKanjiConverter {
         } else {
             // Sort candidates, prioritizing pure kanji/kana over mixed roman+kanji
             bestFiveSentenceCandidates = wholeSentenceUniqueCandidates.min(count: 5, sortedBy: { lhs, rhs in
-                // Check if candidates have mixed roman/non-roman characters
-                let lhsHasRoman = lhs.text.containsRomanAlphabet
-                let lhsHasNonRoman = lhs.text.contains(where: { char in
-                    let str = String(char)
-                    return !str.onlyRomanAlphabet && !str.isEmpty
-                })
-                let lhsMixed = lhsHasRoman && lhsHasNonRoman
-                
-                let rhsHasRoman = rhs.text.containsRomanAlphabet
-                let rhsHasNonRoman = rhs.text.contains(where: { char in
-                    let str = String(char)
-                    return !str.onlyRomanAlphabet && !str.isEmpty
-                })
-                let rhsMixed = rhsHasRoman && rhsHasNonRoman
-                
+                let lhsMixed = isMixedCandidate(lhs)
+                let rhsMixed = isMixedCandidate(rhs)
+
                 // If only one is mixed, prioritize the pure one
                 if lhsMixed != rhsMixed {
                     return !lhsMixed  // lhs is better if it's NOT mixed
                 }
-                
+
                 // Otherwise, sort by value
                 return lhs.value > rhs.value
             })
