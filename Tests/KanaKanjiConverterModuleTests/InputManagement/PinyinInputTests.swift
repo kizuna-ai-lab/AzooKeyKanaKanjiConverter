@@ -469,4 +469,171 @@ final class PinyinInputTests: XCTestCase {
         let renResults = results.filter { $0.element.word == "人" && $0.pinyinLength == 3 }
         XCTAssertFalse(renResults.isEmpty, "Should find '人' for partial pinyin 'ren'")
     }
+
+    // MARK: - RomanInputMapping Tests
+
+    /// Test basic RomanInputMapping with simple input (no separators)
+    func testRomanInputMappingBasic() throws {
+        var c = ComposingText()
+        sequentialInput(&c, sequence: "yinhang", inputStyle: .roman2kana)
+
+        let mapping = c.buildRomanInputMapping()
+
+        // Roman string should match rawRomanInput
+        XCTAssertEqual(mapping.romanString, "yinhang")
+
+        // Each input index should map to corresponding roman position (1:1 mapping)
+        XCTAssertEqual(mapping.inputToRoman.count, 7)
+        XCTAssertEqual(mapping.romanToInput.count, 7)
+
+        for i in 0..<7 {
+            XCTAssertEqual(mapping.inputToRoman[i], i, "inputToRoman[\(i)] should be \(i)")
+            XCTAssertEqual(mapping.romanToInput[i], i, "romanToInput[\(i)] should be \(i)")
+        }
+    }
+
+    /// Test RomanInputMapping with .key InputPiece (Desktop app simulation)
+    func testRomanInputMappingWithKeyInputPiece() throws {
+        var c = ComposingText()
+
+        // Simulate Desktop app input using .key InputPiece
+        let elements = "zhongguo".map { char in
+            ComposingText.InputElement(
+                piece: .key(intention: nil, input: char, modifiers: []),
+                inputStyle: .roman2kana
+            )
+        }
+        c.insertAtCursorPosition(elements)
+
+        let mapping = c.buildRomanInputMapping()
+
+        XCTAssertEqual(mapping.romanString, "zhongguo")
+        XCTAssertEqual(mapping.inputToRoman.count, 8)
+        XCTAssertEqual(mapping.romanToInput.count, 8)
+
+        // Verify bidirectional mapping
+        for i in 0..<8 {
+            XCTAssertEqual(mapping.inputToRoman[i], i)
+            XCTAssertEqual(mapping.romanToInput[i], i)
+        }
+    }
+
+    /// Test RomanInputMapping with composition separators
+    /// This is the critical test - separators should not appear in romanString
+    /// but the mapping should correctly handle the offset
+    func testRomanInputMappingWithSeparators() throws {
+        var c = ComposingText()
+
+        // Insert some text
+        sequentialInput(&c, sequence: "ab", inputStyle: .roman2kana)
+
+        // Move cursor to middle and insert more (this adds a separator)
+        c.moveCursorFromCursorPosition(count: -1)
+        sequentialInput(&c, sequence: "c", inputStyle: .roman2kana)
+
+        // The input array might now contain separators
+        let mapping = c.buildRomanInputMapping()
+
+        // The roman string should only contain the actual characters
+        // Check that the mapping handles this correctly
+        XCTAssertFalse(mapping.romanString.isEmpty)
+
+        // All romanToInput indices should be valid
+        for romanIdx in 0..<mapping.romanToInput.count {
+            let inputIdx = mapping.romanToInput[romanIdx]
+            XCTAssertGreaterThanOrEqual(inputIdx, 0)
+            XCTAssertLessThan(inputIdx, c.input.count)
+        }
+
+        // All inputToRoman values should be valid or -1 (for separators)
+        for inputIdx in 0..<mapping.inputToRoman.count {
+            let romanIdx = mapping.inputToRoman[inputIdx]
+            if romanIdx >= 0 {
+                XCTAssertLessThan(romanIdx, mapping.romanString.count)
+            }
+        }
+    }
+
+    /// Test that mapping correctly handles the coordinate transformation
+    /// This simulates the fix for the "yinhang" bug where LatticeRange
+    /// used input indices but pinyin search used roman positions
+    func testRomanInputMappingCoordinateTransformation() throws {
+        var c = ComposingText()
+        sequentialInput(&c, sequence: "yinhang", inputStyle: .roman2kana)
+
+        let mapping = c.buildRomanInputMapping()
+
+        // For a complete pinyin like "yinhang" (7 characters):
+        // - Input array has 7 elements
+        // - Roman string has 7 characters
+        // - We search for pinyin matches using roman positions
+        // - We create LatticeRange using input indices
+
+        // Simulate finding "yinhang" as a pinyin match at roman position 0
+        let romanStartPos = 0
+        let pinyinLength = 7  // "yinhang" length
+
+        // Convert to input indices for LatticeRange
+        let startInputIndex = mapping.romanToInput[romanStartPos]
+        let romanEndPos = romanStartPos + pinyinLength - 1
+        let endInputIndex = mapping.romanToInput[romanEndPos]
+
+        XCTAssertEqual(startInputIndex, 0, "Start input index should be 0")
+        XCTAssertEqual(endInputIndex, 6, "End input index should be 6")
+
+        // The LatticeRange would be .input(from: 0, to: 7)
+        // This correctly covers all 7 input elements
+    }
+
+    /// Test empty ComposingText mapping
+    func testRomanInputMappingEmpty() throws {
+        let c = ComposingText()
+        let mapping = c.buildRomanInputMapping()
+
+        XCTAssertEqual(mapping.romanString, "")
+        XCTAssertTrue(mapping.inputToRoman.isEmpty)
+        XCTAssertTrue(mapping.romanToInput.isEmpty)
+    }
+
+    /// Test mapping with mixed input types
+    func testRomanInputMappingMixedInputTypes() throws {
+        var c = ComposingText()
+
+        // Insert .character type
+        c.insertAtCursorPosition("ab", inputStyle: .roman2kana)
+
+        // Insert .key type
+        let keyElements = "cd".map { char in
+            ComposingText.InputElement(
+                piece: .key(intention: nil, input: char, modifiers: []),
+                inputStyle: .roman2kana
+            )
+        }
+        c.insertAtCursorPosition(keyElements)
+
+        let mapping = c.buildRomanInputMapping()
+
+        XCTAssertEqual(mapping.romanString, "abcd")
+        XCTAssertEqual(mapping.inputToRoman.count, 4)
+        XCTAssertEqual(mapping.romanToInput.count, 4)
+    }
+
+    /// Test that uppercase characters are lowercased in mapping
+    func testRomanInputMappingLowercase() throws {
+        var c = ComposingText()
+
+        // Insert mixed case using .key InputPiece
+        let elements = "YinHang".map { char in
+            ComposingText.InputElement(
+                piece: .key(intention: nil, input: char, modifiers: []),
+                inputStyle: .roman2kana
+            )
+        }
+        c.insertAtCursorPosition(elements)
+
+        let mapping = c.buildRomanInputMapping()
+
+        // Roman string should be lowercase
+        XCTAssertEqual(mapping.romanString, "yinhang")
+    }
 }

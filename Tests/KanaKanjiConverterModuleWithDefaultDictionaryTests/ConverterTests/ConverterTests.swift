@@ -8,6 +8,7 @@
 
 import Foundation
 @testable import KanaKanjiConverterModuleWithDefaultDictionary
+import SwiftUtils
 import XCTest
 
 final class ConverterTests: XCTestCase {
@@ -175,6 +176,35 @@ final class ConverterTests: XCTestCase {
         c.deleteBackwardFromCursorPosition(count: 1)
         let results = converter.requestCandidates(c, options: requestOptions())
         XCTAssertTrue(results.mainResults.contains { $0.text == "黄" })
+    }
+
+    // Test for filtering meaningless partial matches with mixed roman/kanji
+    func testYinhangConversion() async throws {
+        let converter = KanaKanjiConverter.withDefaultDictionary()
+        var c = ComposingText()
+        c.insertAtCursorPosition("yinhang", inputStyle: .roman2kana)
+        
+        let results = converter.requestCandidates(c, options: requestOptions())
+        
+        // Print the first 15 results for debugging
+        print("\nFirst 15 candidates:")
+        for (i, candidate) in results.mainResults.prefix(15).enumerated() {
+            print("  \(i+1). '\(candidate.text)' (value: \(candidate.value))")
+        }
+        
+        // Check that meaningless partial matches that mix roman with kanji are filtered out
+        // These are dictionary lookups that partially match and keep unconverted roman characters
+        let meaninglessPatterns = ["y印版g", "y印半g", "yインハンg", "YインハンG"]
+        for pattern in meaninglessPatterns {
+            XCTAssertFalse(results.mainResults.contains { $0.text == pattern },
+                           "Meaningless partial match '\(pattern)' (roman+kanji mix) should be filtered out")
+        }
+        
+        // At least the first candidate should not be a single roman character
+        if let first = results.mainResults.first {
+            let isSingleRoman = first.text.count == 1 && first.text.onlyRomanAlphabet
+            XCTAssertFalse(isSingleRoman, "First candidate should not be a single roman character, but got: '\(first.text)'")
+        }
     }
 
     // memo: このケースでfatalErrorが発生する不具合が生じることがあった

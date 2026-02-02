@@ -436,6 +436,42 @@ public final class KanaKanjiConverter {
         var candidates: [Candidate] = []
         let string = inputData.convertTarget.toKatakana()
         let composingCount: ComposingCount = .inputCount(inputData.input.count)
+        
+        // Check if the string has INTERLEAVED roman and non-roman characters
+        // Skip generating meaningless conversion candidates for interleaved mixing
+        // (e.g., "yインハンg" from input "yinhang" where y and g remain unconverted)
+        // But allow trailing unconverted roman (e.g., "私のxiansheng")
+        let isInterleaved: Bool = {
+            let hasRoman = string.containsRomanAlphabet
+            let hasNonRoman = string.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+
+            // If not mixed at all, not interleaved
+            if !hasRoman || !hasNonRoman {
+                return false
+            }
+
+            // Find the last non-roman character index
+            guard let lastNonRomanIndex = string.lastIndex(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            }) else {
+                return false
+            }
+
+            // Check if there's any roman character BEFORE the last non-roman character
+            let prefixBeforeLastNonRoman = string[..<lastNonRomanIndex]
+            return prefixBeforeLastNonRoman.contains(where: { char in
+                String(char).onlyRomanAlphabet
+            })
+        }()
+
+        if isInterleaved {
+            return []
+        }
+        
         do {
             // カタカナ
             let value = -14 * getKatakanaScore(string)
@@ -566,20 +602,79 @@ public final class KanaKanjiConverter {
                 return ConversionResult(mainResults: (consume merged).sorted(by: {$0.value > $1.value}), predictionResults: [], englishPredictionResults: [], firstClauseResults: [])
             }
         }
+
+        // Helper function to check if roman and non-roman characters are INTERLEAVED
+        // Returns true for "y印版g" (should filter - roman scattered in Japanese)
+        // Returns false for "私のxiansheng" (should keep - roman only at the end)
+        let isInterleavedMixed: (String) -> Bool = { text in
+            let hasRoman = text.containsRomanAlphabet
+            let hasNonRoman = text.contains(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            })
+
+            // If not mixed at all, not interleaved
+            if !hasRoman || !hasNonRoman {
+                return false
+            }
+
+            // Find the last non-roman character index
+            guard let lastNonRomanIndex = text.lastIndex(where: { char in
+                let str = String(char)
+                return !str.onlyRomanAlphabet && !str.isEmpty
+            }) else {
+                return false
+            }
+
+            // Check if there's any roman character BEFORE the last non-roman character
+            // If so, it's interleaved (e.g., "y印版g" has "y" before "版")
+            let prefixBeforeLastNonRoman = text[..<lastNonRomanIndex]
+            return prefixBeforeLastNonRoman.contains(where: { char in
+                String(char).onlyRomanAlphabet
+            })
+        }
+
+        // Helper function to check if a candidate has interleaved mixed characters
+        let isMixedCandidate: (Candidate) -> Bool = { candidate in
+            isInterleavedMixed(candidate.text)
+        }
+
         // モデル重みを統合
         let bestFiveSentenceCandidates: [Candidate]
         if options.zenzaiMode.enabled {
             // FIXME: もう少し良い方法はありそうだけど、短期的にかなりハックな実装にした
             // candidateのvalueをZenzaiの出力順に書き換えることで、このあとのrerank処理で騙されてくれるようになっている
             // より根本的には、`Candidate`にAI評価値をもたせるなどの方法が必要そう
-            var first5 = Array(wholeSentenceUniqueCandidates.prefix(5))
+
+            // Filter out mixed roman/kanji candidates first, then take top 5
+            // If not enough pure candidates, fill with mixed ones (preserving original order)
+            let pureCandidates = wholeSentenceUniqueCandidates.filter { !isMixedCandidate($0) }
+            let mixedCandidates = wholeSentenceUniqueCandidates.filter { isMixedCandidate($0) }
+
+            var first5 = Array(pureCandidates.prefix(5))
+            if first5.count < 5 {
+                first5.append(contentsOf: mixedCandidates.prefix(5 - first5.count))
+            }
+
             let values = first5.map(\.value).sorted(by: >)
             for (i, v) in zip(first5.indices, values) {
                 first5[i].value = v
             }
             bestFiveSentenceCandidates = first5
         } else {
-            bestFiveSentenceCandidates = wholeSentenceUniqueCandidates.min(count: 5, sortedBy: {$0.value > $1.value})
+            // Sort candidates, prioritizing pure kanji/kana over mixed roman+kanji
+            bestFiveSentenceCandidates = wholeSentenceUniqueCandidates.min(count: 5, sortedBy: { lhs, rhs in
+                let lhsMixed = isMixedCandidate(lhs)
+                let rhsMixed = isMixedCandidate(rhs)
+
+                // If only one is mixed, prioritize the pure one
+                if lhsMixed != rhsMixed {
+                    return !lhsMixed  // lhs is better if it's NOT mixed
+                }
+
+                // Otherwise, sort by value
+                return lhs.value > rhs.value
+            })
         }
 
         var predictionResults: [Candidate] = []
@@ -617,16 +712,24 @@ public final class KanaKanjiConverter {
             // その他のトップレベル変換（先頭に表示されうる変換候補）
             let topLevelAdditionalCandidates = self.getTopLevelAdditionalCandidate(inputData, options: options)
             // best8、foreign_candidates、zeroHintPrediction_candidates、toplevel_additional_candidate、user_shortcuts を混ぜて上位5件を取得する
-            fullCandidates = getUniqueCandidate(
+            let rawFullCandidates = getUniqueCandidate(
                 bestFiveSentenceCandidates
                     .chained(consume bestThreePredictionCandidates)
                     .chained(consume foreignCandidates)
                     .chained(consume topLevelAdditionalCandidates)
                     .chained(consume userShortcutsCandidates)
             ).min(count: 5, sortedBy: {$0.value > $1.value})
+
+            // Filter out INTERLEAVED mixed roman/kanji candidates from fullCandidates
+            // This ensures "y印版g" type candidates don't appear at the top
+            // But allows "私のxiansheng" (trailing unconverted roman) to pass through
+            fullCandidates = rawFullCandidates.filter { candidate in
+                !isInterleavedMixed(candidate.text)
+            }
         }
         // 文節のみ変換するパターン（上位5件）
-        let uniqueFirstClauseCandidates = self.getUniqueCandidate((consume clauseResult).lazy.map {(candidateData: CandidateData) -> Candidate in
+        // First, collect all candidates before filtering for debugging
+        let allFirstClauseCandidates = self.getUniqueCandidate((consume clauseResult).lazy.map {(candidateData: CandidateData) -> Candidate in
             let first = candidateData.clauses.first!
             let count = max(0, first.clause.dataEndIndex)
             return Candidate(
@@ -637,6 +740,20 @@ public final class KanaKanjiConverter {
                 data: Array(candidateData.data[0...count])
             )
         })
+
+        let uniqueFirstClauseCandidates = allFirstClauseCandidates.filter { candidate in
+            // Filter out INTERLEAVED mixed roman/kanji candidates (e.g., "y印版g")
+            // But allow trailing unconverted roman (e.g., "私のxiansheng")
+            let text = candidate.text
+            if isInterleavedMixed(text) {
+                return false
+            }
+            // Also filter single roman characters (not meaningful conversions)
+            if text.count == 1 && text.containsRomanAlphabet {
+                return false
+            }
+            return true
+        }
 
         var firstClauseResults = uniqueFirstClauseCandidates.min(count: 5) {
             if $0.rubyCount == $1.rubyCount {
@@ -672,6 +789,19 @@ public final class KanaKanjiConverter {
                         data: [$0.data]
                     )
                 }
+                .filter { candidate in
+                    // Filter out INTERLEAVED mixed roman/kanji candidates (e.g., "y印版g")
+                    // But allow trailing unconverted roman (e.g., "私のxiansheng")
+                    let text = candidate.text
+                    if isInterleavedMixed(text) {
+                        return false
+                    }
+                    // Also filter single roman characters (not meaningful conversions)
+                    if text.count == 1 && text.containsRomanAlphabet {
+                        return false
+                    }
+                    return true
+                }
             // その他辞書データに追加する候補
             let additionalCandidates: [Candidate] = self.getAdditionalCandidate(inputData, options: options)
             var candidates = self.getUniqueCandidate((consume dicCandidates).chained(consume additionalCandidates), seenCandidates: seenCandidate)
@@ -700,13 +830,20 @@ public final class KanaKanjiConverter {
                 result.insert(candidate, at: min(result.endIndex, 2))
             } else if let candidate = bestFiveSentenceCandidates.first(where: checkRuby) {
                 result.insert(candidate, at: min(result.endIndex, 2))
-            } else if let candidate = wholeSentenceUniqueCandidates.first(where: checkRuby) {
+            } else if let candidate = wholeSentenceUniqueCandidates.first(where: { checkRuby($0) && !isMixedCandidate($0) }) {
                 result.insert(candidate, at: min(result.endIndex, 2))
             }
         }
 
         result.append(contentsOf: consume firstClauseCandidates)
         result.append(contentsOf: consume wordCandidates)
+
+        // Final filter: remove INTERLEAVED mixed roman/kanji candidates from result
+        // This ensures "y印版g" type candidates never appear in the final results
+        // But allows "私のxiansheng" (trailing unconverted roman) to pass through
+        result = result.filter { candidate in
+            !isInterleavedMixed(candidate.text)
+        }
 
         result.mutatingForEach { item in
             item.withActions(self.getAppropriateActions(item))
@@ -724,6 +861,7 @@ public final class KanaKanjiConverter {
             item.withActions(self.getAppropriateActions(item))
             item.parseTemplate()
         }
+
         return ConversionResult(mainResults: result, predictionResults: predictionResults, englishPredictionResults: englishPredictionResults, firstClauseResults: firstClauseResults)
     }
 

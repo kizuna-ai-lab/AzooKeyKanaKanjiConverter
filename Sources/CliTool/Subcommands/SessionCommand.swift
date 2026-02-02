@@ -32,6 +32,8 @@ extension Subcommands {
         var reportScore = false
         @Flag(name: [.customLong("roman2kana")], help: "Use roman2kana input.")
         var roman2kana = false
+        @Flag(name: [.customLong("pinyin")], help: "Enable pinyin lookup for Chinese character input.")
+        var enablePinyin = false
         @Option(name: [.customLong("config_user_dictionary")], help: "User Dictionary JSON file path")
         var configUserDictionary: String?
         @Option(name: [.customLong("config_zenzai_inference_limit")], help: "inference limit for zenzai.")
@@ -127,6 +129,10 @@ extension Subcommands {
 
             let converter = KanaKanjiConverter.withDefaultDictionary()
             converter.importDynamicUserDictionary(userDictionary)
+            if self.enablePinyin {
+                converter.setPinyinLookupEnabled(true)
+                print("Pinyin lookup enabled")
+            }
             var composingText = ComposingText()
             let inputStyle: InputStyle = self.roman2kana ? .roman2kana : .direct
             var lastCandidates: [Candidate] = []
